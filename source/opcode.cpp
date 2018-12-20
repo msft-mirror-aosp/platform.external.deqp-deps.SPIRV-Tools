@@ -324,7 +324,7 @@ int32_t spvOpcodeGeneratesType(SpvOp op) {
     case SpvOpTypePipe:
     case SpvOpTypePipeStorage:
     case SpvOpTypeNamedBarrier:
-    case SpvOpTypeAccelerationStructureNVX:
+    case SpvOpTypeAccelerationStructureNV:
       return true;
     default:
       // In particular, OpTypeForwardPointer does not generate a type,
@@ -582,6 +582,22 @@ bool spvOpcodeIsScalarizable(SpvOp opcode) {
     case SpvOpFUnordLessThanEqual:
     case SpvOpFOrdGreaterThanEqual:
     case SpvOpFUnordGreaterThanEqual:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool spvOpcodeIsDebug(SpvOp opcode) {
+  switch (opcode) {
+    case SpvOpName:
+    case SpvOpMemberName:
+    case SpvOpSource:
+    case SpvOpSourceContinued:
+    case SpvOpSourceExtension:
+    case SpvOpString:
+    case SpvOpLine:
+    case SpvOpNoLine:
       return true;
     default:
       return false;

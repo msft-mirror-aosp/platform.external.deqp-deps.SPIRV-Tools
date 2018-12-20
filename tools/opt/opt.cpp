@@ -342,6 +342,10 @@ Options (in lexicographical order):
                prints CPU/WALL/USR/SYS time (and RSS if possible), but note that
                USR/SYS time are returned by getrusage() and can have a small
                error.
+  --upgrade-memory-model
+               Upgrades the Logical GLSL450 memory model to Logical VulkanKHR.
+               Transforms memory, image, atomic and barrier operations to conform
+               to that model's requirements.
   --vector-dce
                This pass looks for components of vectors that are unused, and
                removes them from the vector.  Note this would still leave around
@@ -488,9 +492,9 @@ std::string CanonicalizeFlag(const char** argv, int argc, int* argi) {
   return canonical_arg.str();
 }
 
-// the number of command-line flags. |argv| points to an array of strings
-// holding the flags. |optimizer| is the Optimizer instance used to optimize the
-// program.
+// Parses command-line flags. |argc| contains the number of command-line flags.
+// |argv| points to an array of strings holding the flags. |optimizer| is the
+// Optimizer instance used to optimize the program.
 //
 // On return, this function stores the name of the input program in |in_file|.
 // The name of the output file in |out_file|. The return value indicates whether
@@ -557,6 +561,8 @@ OptStatus ParseFlags(int argc, const char** argv,
           return {OPT_STOP, 1};
         }
         optimizer_options->set_max_id_bound(max_id_bound);
+        validator_options->SetUniversalLimit(spv_validator_limit_max_id_bound,
+                                             max_id_bound);
       } else {
         // Some passes used to accept the form '--pass arg', canonicalize them
         // to '--pass=arg'.
@@ -593,16 +599,16 @@ int main(int argc, const char** argv) {
   const char* out_file = nullptr;
 
   spv_target_env target_env = kDefaultEnvironment;
-  spvtools::ValidatorOptions validator_options;
-  spvtools::OptimizerOptions optimizer_options;
 
-  optimizer_options.set_validator_options(validator_options);
 
   spvtools::Optimizer optimizer(target_env);
   optimizer.SetMessageConsumer(spvtools::utils::CLIMessageConsumer);
 
+  spvtools::ValidatorOptions validator_options;
+  spvtools::OptimizerOptions optimizer_options;
   OptStatus status = ParseFlags(argc, argv, &optimizer, &in_file, &out_file,
                                 &validator_options, &optimizer_options);
+  optimizer_options.set_validator_options(validator_options);
 
   if (status.action == OPT_STOP) {
     return status.code;

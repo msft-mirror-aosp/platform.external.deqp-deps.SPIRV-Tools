@@ -20,6 +20,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -73,8 +74,12 @@ class IRContext {
     kAnalysisRegisterPressure = 1 << 9,
     kAnalysisValueNumberTable = 1 << 10,
     kAnalysisStructuredCFG = 1 << 11,
-    kAnalysisEnd = 1 << 12
+    kAnalysisBuiltinVarId = 1 << 12,
+    kAnalysisIdToFuncMapping = 1 << 13,
+    kAnalysisEnd = 1 << 14
   };
+
+  using ProcessFunction = std::function<bool(Function*)>;
 
   friend inline Analysis operator|(Analysis lhs, Analysis rhs);
   friend inline Analysis& operator|=(Analysis& lhs, Analysis rhs);
@@ -231,7 +236,7 @@ class IRContext {
 
   // Returns a pointer to a StructuredCFGAnalysis.  If the analysis is invalid,
   // it is rebuilt first.
-  StructuredCFGAnalysis* GetStructuedCFGAnalaysis() {
+  StructuredCFGAnalysis* GetStructuredCFGAnalysis() {
     if (!AreAnalysesValid(kAnalysisStructuredCFG)) {
       BuildStructuredCFGAnalysis();
     }
@@ -472,6 +477,48 @@ class IRContext {
   uint32_t max_id_bound() const { return max_id_bound_; }
   void set_max_id_bound(uint32_t new_bound) { max_id_bound_ = new_bound; }
 
+  // Return id of variable only decorated with |builtin|, if in module.
+  // Create variable and return its id otherwise. If builtin not currently
+  // supported, return 0.
+  uint32_t GetBuiltinVarId(uint32_t builtin);
+
+  // Returns the function whose id is |id|, if one exists.  Returns |nullptr|
+  // otherwise.
+  Function* GetFunction(uint32_t id) {
+    if (!AreAnalysesValid(kAnalysisIdToFuncMapping)) {
+      BuildIdToFuncMapping();
+    }
+    auto entry = id_to_func_.find(id);
+    return (entry != id_to_func_.end()) ? entry->second : nullptr;
+  }
+
+  Function* GetFunction(Instruction* inst) {
+    if (inst->opcode() != SpvOpFunction) {
+      return nullptr;
+    }
+    return GetFunction(inst->result_id());
+  }
+
+  // Add to |todo| all ids of functions called in |func|.
+  void AddCalls(const Function* func, std::queue<uint32_t>* todo);
+
+  // Applies |pfn| to every function in the call trees that are rooted at the
+  // entry points.  Returns true if any call |pfn| returns true.  By convention
+  // |pfn| should return true if it modified the module.
+  bool ProcessEntryPointCallTree(ProcessFunction& pfn);
+
+  // Applies |pfn| to every function in the call trees rooted at the entry
+  // points and exported functions.  Returns true if any call |pfn| returns
+  // true.  By convention |pfn| should return true if it modified the module.
+  bool ProcessReachableCallTree(ProcessFunction& pfn);
+
+  // Applies |pfn| to every function in the call trees rooted at the elements of
+  // |roots|.  Returns true if any call to |pfn| returns true.  By convention
+  // |pfn| should return true if it modified the module.  After returning
+  // |roots| will be empty.
+  bool ProcessCallTreeFromRoots(ProcessFunction& pfn,
+                                std::queue<uint32_t>* roots);
+
  private:
   // Builds the def-use manager from scratch, even if it was already valid.
   void BuildDefUseManager() {
@@ -490,6 +537,15 @@ class IRContext {
       }
     }
     valid_analyses_ = valid_analyses_ | kAnalysisInstrToBlockMapping;
+  }
+
+  // Builds the instruction-function map for the whole module.
+  void BuildIdToFuncMapping() {
+    id_to_func_.clear();
+    for (auto& fn : *module_) {
+      id_to_func_[fn.result_id()] = &fn;
+    }
+    valid_analyses_ = valid_analyses_ | kAnalysisIdToFuncMapping;
   }
 
   void BuildDecorationManager() {
@@ -543,6 +599,13 @@ class IRContext {
     valid_analyses_ = valid_analyses_ | kAnalysisLoopAnalysis;
   }
 
+  // Removes all computed loop descriptors.
+  void ResetBuiltinAnalysis() {
+    // Clear the cache.
+    builtin_var_id_map_.clear();
+    valid_analyses_ = valid_analyses_ | kAnalysisBuiltinVarId;
+  }
+
   // Analyzes the features in the owned module. Builds the manager if required.
   void AnalyzeFeatures() {
     feature_mgr_ = MakeUnique<FeatureManager>(grammar_);
@@ -565,6 +628,13 @@ class IRContext {
   // Returns true if it is suppose to be valid but it is incorrect.  Returns
   // true if the cfg is invalidated.
   bool CheckCFG();
+
+  // Return id of variable only decorated with |builtin|, if in module.
+  // Return 0 otherwise.
+  uint32_t FindBuiltinVar(uint32_t builtin);
+
+  // Add |var_id| to all entry points in module.
+  void AddVarToEntryPoints(uint32_t var_id);
 
   // The SPIR-V syntax context containing grammar tables for opcodes and
   // operands.
@@ -593,12 +663,19 @@ class IRContext {
   std::unique_ptr<analysis::DecorationManager> decoration_mgr_;
   std::unique_ptr<FeatureManager> feature_mgr_;
 
-  // A map from instructions the the basic block they belong to. This mapping is
+  // A map from instructions to the basic block they belong to. This mapping is
   // built on-demand when get_instr_block() is called.
   //
   // NOTE: Do not traverse this map. Ever. Use the function and basic block
   // iterators to traverse instructions.
   std::unordered_map<Instruction*, BasicBlock*> instr_to_block_;
+
+  // A map from ids to the function they define. This mapping is
+  // built on-demand when GetFunction() is called.
+  //
+  // NOTE: Do not traverse this map. Ever. Use the function and basic block
+  // iterators to traverse instructions.
+  std::unordered_map<uint32_t, Function*> id_to_func_;
 
   // A bitset indicating which analyes are currently valid.
   Analysis valid_analyses_;
@@ -606,6 +683,10 @@ class IRContext {
   // Opcodes of shader capability core executable instructions
   // without side-effect.
   std::unordered_map<uint32_t, std::unordered_set<uint32_t>> combinator_ops_;
+
+  // Opcodes of shader capability core executable instructions
+  // without side-effect.
+  std::unordered_map<uint32_t, uint32_t> builtin_var_id_map_;
 
   // The CFG for all the functions in |module_|.
   std::unique_ptr<CFG> cfg_;
@@ -786,6 +867,9 @@ void IRContext::AddCapability(std::unique_ptr<Instruction>&& c) {
 }
 
 void IRContext::AddExtension(std::unique_ptr<Instruction>&& e) {
+  if (AreAnalysesValid(kAnalysisDefUse)) {
+    get_def_use_mgr()->AnalyzeInstDefUse(e.get());
+  }
   module()->AddExtension(std::move(e));
 }
 
@@ -827,6 +911,9 @@ void IRContext::AddAnnotationInst(std::unique_ptr<Instruction>&& a) {
   if (AreAnalysesValid(kAnalysisDecorations)) {
     get_decoration_mgr()->AddDecoration(a.get());
   }
+  if (AreAnalysesValid(kAnalysisDefUse)) {
+    get_def_use_mgr()->AnalyzeInstDefUse(a.get());
+  }
   module()->AddAnnotationInst(std::move(a));
 }
 
@@ -838,10 +925,10 @@ void IRContext::AddType(std::unique_ptr<Instruction>&& t) {
 }
 
 void IRContext::AddGlobalValue(std::unique_ptr<Instruction>&& v) {
-  module()->AddGlobalValue(std::move(v));
   if (AreAnalysesValid(kAnalysisDefUse)) {
-    get_def_use_mgr()->AnalyzeInstDef(&*(--types_values_end()));
+    get_def_use_mgr()->AnalyzeInstDefUse(&*v);
   }
+  module()->AddGlobalValue(std::move(v));
 }
 
 void IRContext::AddFunction(std::unique_ptr<Function>&& f) {

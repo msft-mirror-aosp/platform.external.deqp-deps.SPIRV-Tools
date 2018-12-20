@@ -115,9 +115,14 @@ class Function {
   // and optionally on debug line instructions that might precede them.
   void ForEachParam(const std::function<void(const Instruction*)>& f,
                     bool run_on_debug_line_insts = false) const;
+  void ForEachParam(const std::function<void(Instruction*)>& f,
+                    bool run_on_debug_line_insts = false);
 
   BasicBlock* InsertBasicBlockAfter(std::unique_ptr<BasicBlock>&& new_block,
                                     BasicBlock* position);
+
+  // Return true if the function calls itself either directly or indirectly.
+  bool IsRecursive() const;
 
   // Pretty-prints all the basic blocks in this function into a std::string.
   //

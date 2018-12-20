@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #include "source/opt/function.h"
+#include "function.h"
+#include "ir_context.h"
 
+#include <source/util/bit_vector.h>
 #include <ostream>
 #include <sstream>
 
@@ -68,6 +71,13 @@ void Function::ForEachInst(const std::function<void(const Instruction*)>& f,
         ->ForEachInst(f, run_on_debug_line_insts);
 }
 
+void Function::ForEachParam(const std::function<void(Instruction*)>& f,
+                            bool run_on_debug_line_insts) {
+  for (auto& param : params_)
+    static_cast<Instruction*>(param.get())
+        ->ForEachInst(f, run_on_debug_line_insts);
+}
+
 void Function::ForEachParam(const std::function<void(const Instruction*)>& f,
                             bool run_on_debug_line_insts) const {
   for (const auto& param : params_)
@@ -89,6 +99,19 @@ BasicBlock* Function::InsertBasicBlockAfter(
   return nullptr;
 }
 
+bool Function::IsRecursive() const {
+  IRContext* ctx = blocks_.front()->GetLabel()->context();
+  IRContext::ProcessFunction mark_visited = [this](Function* fp) {
+    return fp == this;
+  };
+
+  // Process the call tree from all of the function called by |this|.  If it get
+  // back to |this|, then we have a recursive function.
+  std::queue<uint32_t> roots;
+  ctx->AddCalls(this, &roots);
+  return ctx->ProcessCallTreeFromRoots(mark_visited, &roots);
+}
+
 std::ostream& operator<<(std::ostream& str, const Function& func) {
   str << func.PrettyPrint();
   return str;
@@ -108,6 +131,5 @@ std::string Function::PrettyPrint(uint32_t options) const {
   });
   return str.str();
 }
-
 }  // namespace opt
 }  // namespace spvtools

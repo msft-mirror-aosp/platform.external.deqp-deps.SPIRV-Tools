@@ -21,45 +21,11 @@
 #include "source/spirv_target_env.h"
 #include "source/util/bitutils.h"
 #include "source/val/instruction.h"
+#include "source/val/validate_scopes.h"
 #include "source/val/validation_state.h"
 
 namespace spvtools {
 namespace val {
-
-// Validates Memory Scope operand.
-spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
-                                 uint32_t id) {
-  const SpvOp opcode = inst->opcode();
-  bool is_int32 = false, is_const_int32 = false;
-  uint32_t value = 0;
-  std::tie(is_int32, is_const_int32, value) = _.EvalInt32IfConst(id);
-
-  if (!is_int32) {
-    return _.diag(SPV_ERROR_INVALID_DATA, inst)
-           << spvOpcodeString(opcode) << ": expected Scope to be 32-bit int";
-  }
-
-  if (!is_const_int32) {
-    return SPV_SUCCESS;
-  }
-
-#if 0
-  // TODO(atgoo@github.com): this check fails Vulkan CTS, reenable once fixed.
-  if (spvIsVulkanEnv(_.context()->target_env)) {
-    if (value != SpvScopeDevice && value != SpvScopeWorkgroup &&
-        value != SpvScopeInvocation) {
-      return _.diag(SPV_ERROR_INVALID_DATA, inst)
-             << spvOpcodeString(opcode)
-             << ": in Vulkan environment memory scope is limited to Device, "
-                "Workgroup and Invocation";
-    }
-  }
-#endif
-
-  // TODO(atgoo@github.com) Add checks for OpenCL and OpenGL environments.
-
-  return SPV_SUCCESS;
-}
 
 // Validates a Memory Semantics operand.
 spv_result_t ValidateMemorySemantics(ValidationState_t& _,
@@ -79,7 +45,20 @@ spv_result_t ValidateMemorySemantics(ValidationState_t& _,
   }
 
   if (!is_const_int32) {
+    if (_.HasCapability(SpvCapabilityShader)) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << "Memory Semantics ids must be OpConstant when Shader "
+                "capability is present";
+    }
     return SPV_SUCCESS;
+  }
+
+  if (_.memory_model() == SpvMemoryModelVulkanKHR &&
+      flags & SpvMemorySemanticsSequentiallyConsistentMask) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << "SequentiallyConsistent memory "
+              "semantics cannot be used with "
+              "the VulkanKHR memory model.";
   }
 
   if (spvtools::utils::CountSetBits(
@@ -107,6 +86,30 @@ spv_result_t ValidateMemorySemantics(ValidationState_t& _,
            << spvOpcodeString(opcode)
            << ": Memory Semantics UniformMemory requires capability "
               "AtomicStorage";
+  }
+
+  if (flags & SpvMemorySemanticsOutputMemoryKHRMask &&
+      !_.HasCapability(SpvCapabilityVulkanMemoryModelKHR)) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << spvOpcodeString(opcode)
+           << ": Memory Semantics OutputMemoryKHR requires capability "
+           << "VulkanMemoryModelKHR";
+  }
+
+  if (flags & SpvMemorySemanticsMakeAvailableKHRMask &&
+      !_.HasCapability(SpvCapabilityVulkanMemoryModelKHR)) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << spvOpcodeString(opcode)
+           << ": Memory Semantics MakeAvailableKHR requires capability "
+           << "VulkanMemoryModelKHR";
+  }
+
+  if (flags & SpvMemorySemanticsMakeVisibleKHRMask &&
+      !_.HasCapability(SpvCapabilityVulkanMemoryModelKHR)) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << spvOpcodeString(opcode)
+           << ": Memory Semantics MakeVisibleKHR requires capability "
+           << "VulkanMemoryModelKHR";
   }
 
   if (opcode == SpvOpAtomicFlagClear &&
@@ -143,6 +146,42 @@ spv_result_t ValidateMemorySemantics(ValidationState_t& _,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << "Vulkan spec disallows OpAtomicStore with Memory Semantics "
                 "Acquire, AcquireRelease and SequentiallyConsistent";
+    }
+  }
+
+  if (flags & SpvMemorySemanticsMakeAvailableKHRMask &&
+      !(flags & (SpvMemorySemanticsReleaseMask |
+                 SpvMemorySemanticsAcquireReleaseMask))) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << spvOpcodeString(opcode)
+           << ": MakeAvailableKHR Memory Semantics also requires either "
+              "Release or AcquireRelease Memory Semantics";
+  }
+
+  if (flags & SpvMemorySemanticsMakeVisibleKHRMask &&
+      !(flags & (SpvMemorySemanticsAcquireMask |
+                 SpvMemorySemanticsAcquireReleaseMask))) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << spvOpcodeString(opcode)
+           << ": MakeVisibleKHR Memory Semantics also requires either Acquire "
+              "or AcquireRelease Memory Semantics";
+  }
+
+  if (flags & (SpvMemorySemanticsMakeAvailableKHRMask |
+               SpvMemorySemanticsMakeVisibleKHRMask)) {
+    const bool includes_storage_class =
+        flags & (SpvMemorySemanticsUniformMemoryMask |
+                 SpvMemorySemanticsSubgroupMemoryMask |
+                 SpvMemorySemanticsWorkgroupMemoryMask |
+                 SpvMemorySemanticsCrossWorkgroupMemoryMask |
+                 SpvMemorySemanticsAtomicCounterMemoryMask |
+                 SpvMemorySemanticsImageMemoryMask |
+                 SpvMemorySemanticsOutputMemoryKHRMask);
+
+    if (!includes_storage_class) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << spvOpcodeString(opcode)
+             << ": expected Memory Semantics to include a storage class";
     }
   }
 
