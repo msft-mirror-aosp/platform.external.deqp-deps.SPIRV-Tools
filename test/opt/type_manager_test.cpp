@@ -117,10 +117,10 @@ std::vector<std::unique_ptr<Type>> GenerateAllTypes() {
   types.emplace_back(new SampledImage(image2));
 
   // Array
-  types.emplace_back(new Array(f32, 100));
-  types.emplace_back(new Array(f32, 42));
+  types.emplace_back(new Array(f32, 100, 1u));
+  types.emplace_back(new Array(f32, 42, 2u));
   auto* a42f32 = types.back().get();
-  types.emplace_back(new Array(u64, 24));
+  types.emplace_back(new Array(u64, 24, s32, {42}));
 
   // RuntimeArray
   types.emplace_back(new RuntimeArray(v3f32));
@@ -200,6 +200,7 @@ TEST(TypeManager, TypeStrings) {
     %pipe    = OpTypePipe ReadOnly
     %ps      = OpTypePipeStorage
     %nb      = OpTypeNamedBarrier
+    %rtacc   = OpTypeAccelerationStructureNV
   )";
 
   std::vector<std::pair<uint32_t, std::string>> type_id_strs = {
@@ -231,6 +232,7 @@ TEST(TypeManager, TypeStrings) {
       {26, "pipe(0)"},
       {27, "pipe_storage"},
       {28, "named_barrier"},
+      {29, "accelerationStructureNV"},
   };
 
   std::unique_ptr<IRContext> context =

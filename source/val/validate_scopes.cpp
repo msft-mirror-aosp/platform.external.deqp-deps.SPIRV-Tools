@@ -22,6 +22,23 @@
 namespace spvtools {
 namespace val {
 
+bool IsValidScope(uint32_t scope) {
+  // Deliberately avoid a default case so we have to update the list when the
+  // scopes list changes.
+  switch (static_cast<SpvScope>(scope)) {
+    case SpvScopeCrossDevice:
+    case SpvScopeDevice:
+    case SpvScopeWorkgroup:
+    case SpvScopeSubgroup:
+    case SpvScopeInvocation:
+    case SpvScopeQueueFamilyKHR:
+      return true;
+    case SpvScopeMax:
+      break;
+  }
+  return false;
+}
+
 spv_result_t ValidateExecutionScope(ValidationState_t& _,
                                     const Instruction* inst, uint32_t scope) {
   SpvOp opcode = inst->opcode();
@@ -36,12 +53,25 @@ spv_result_t ValidateExecutionScope(ValidationState_t& _,
   }
 
   if (!is_const_int32) {
-    if (_.HasCapability(SpvCapabilityShader)) {
-      return _.diag(SPV_ERROR_INVALID_DATA, inst) << "Scope ids must be "
-                                                     "OpConstant when Shader "
-                                                     "capability is present";
+    if (_.HasCapability(SpvCapabilityShader) &&
+        !_.HasCapability(SpvCapabilityCooperativeMatrixNV)) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << "Scope ids must be OpConstant when Shader capability is "
+             << "present";
+    }
+    if (_.HasCapability(SpvCapabilityShader) &&
+        _.HasCapability(SpvCapabilityCooperativeMatrixNV) &&
+        !spvOpcodeIsConstant(_.GetIdOpcode(scope))) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << "Scope ids must be constant or specialization constant when "
+             << "CooperativeMatrixNV capability is present";
     }
     return SPV_SUCCESS;
+  }
+
+  if (is_const_int32 && !IsValidScope(value)) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << "Invalid scope value:\n " << _.Disassemble(*_.FindDef(scope));
   }
 
   // Vulkan specific rules
@@ -54,7 +84,7 @@ spv_result_t ValidateExecutionScope(ValidationState_t& _,
         return _.diag(SPV_ERROR_INVALID_DATA, inst)
                << spvOpcodeString(opcode)
                << ": in Vulkan environment Execution scope is limited to "
-                  "Subgroup";
+               << "Subgroup";
       }
     }
 
@@ -86,7 +116,7 @@ spv_result_t ValidateExecutionScope(ValidationState_t& _,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << spvOpcodeString(opcode)
              << ": in Vulkan environment Execution Scope is limited to "
-                "Workgroup and Subgroup";
+             << "Workgroup and Subgroup";
     }
   }
 
@@ -97,7 +127,7 @@ spv_result_t ValidateExecutionScope(ValidationState_t& _,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << spvOpcodeString(opcode)
              << ": in WebGPU environment Execution Scope is limited to "
-                "Workgroup and Subgroup";
+             << "Workgroup and Subgroup";
     }
   }
 
@@ -130,12 +160,25 @@ spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
   }
 
   if (!is_const_int32) {
-    if (_.HasCapability(SpvCapabilityShader)) {
-      return _.diag(SPV_ERROR_INVALID_DATA, inst) << "Scope ids must be "
-                                                     "OpConstant when Shader "
-                                                     "capability is present";
+    if (_.HasCapability(SpvCapabilityShader) &&
+        !_.HasCapability(SpvCapabilityCooperativeMatrixNV)) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << "Scope ids must be OpConstant when Shader capability is "
+             << "present";
+    }
+    if (_.HasCapability(SpvCapabilityShader) &&
+        _.HasCapability(SpvCapabilityCooperativeMatrixNV) &&
+        !spvOpcodeIsConstant(_.GetIdOpcode(scope))) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << "Scope ids must be constant or specialization constant when "
+             << "CooperativeMatrixNV capability is present";
     }
     return SPV_SUCCESS;
+  }
+
+  if (is_const_int32 && !IsValidScope(value)) {
+    return _.diag(SPV_ERROR_INVALID_DATA, inst)
+           << "Invalid scope value:\n " << _.Disassemble(*_.FindDef(scope));
   }
 
   if (value == SpvScopeQueueFamilyKHR) {
@@ -145,7 +188,7 @@ spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << spvOpcodeString(opcode)
              << ": Memory Scope QueueFamilyKHR requires capability "
-                "VulkanMemoryModelKHR";
+             << "VulkanMemoryModelKHR";
     }
   }
 
@@ -154,7 +197,7 @@ spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
       !_.HasCapability(SpvCapabilityVulkanMemoryModelDeviceScopeKHR)) {
     return _.diag(SPV_ERROR_INVALID_DATA, inst)
            << "Use of device scope with VulkanKHR memory model requires the "
-              "VulkanMemoryModelDeviceScopeKHR capability";
+           << "VulkanMemoryModelDeviceScopeKHR capability";
   }
 
   // Vulkan Specific rules
@@ -171,8 +214,7 @@ spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << spvOpcodeString(opcode)
              << ": in Vulkan 1.0 environment Memory Scope is limited to "
-                "Device, "
-                "Workgroup and Invocation";
+             << "Device, Workgroup and Invocation";
     }
     // Vulkan 1.1 specifc rules
     if (_.context()->target_env == SPV_ENV_VULKAN_1_1 &&
@@ -181,8 +223,18 @@ spv_result_t ValidateMemoryScope(ValidationState_t& _, const Instruction* inst,
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
              << spvOpcodeString(opcode)
              << ": in Vulkan 1.1 environment Memory Scope is limited to "
-                "Device, "
-                "Workgroup and Invocation";
+             << "Device, Workgroup and Invocation";
+    }
+  }
+
+  // WebGPU specific rules
+  if (spvIsWebGPUEnv(_.context()->target_env)) {
+    if (value != SpvScopeWorkgroup && value != SpvScopeSubgroup &&
+        value != SpvScopeQueueFamilyKHR) {
+      return _.diag(SPV_ERROR_INVALID_DATA, inst)
+             << spvOpcodeString(opcode)
+             << ": in WebGPU environment Memory Scope is limited to "
+             << "Workgroup, Subgroup and QueuFamilyKHR";
     }
   }
 

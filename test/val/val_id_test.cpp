@@ -780,6 +780,8 @@ class OpTypeArrayLengthTest
   // Runs spvValidate() on v, printing any errors via spvDiagnosticPrint().
   spv_result_t Val(const SpirvVector& v, const std::string& expected_err = "") {
     spv_const_binary_t cbinary{v.data(), v.size()};
+    spvDiagnosticDestroy(diagnostic_);
+    diagnostic_ = nullptr;
     const auto status =
         spvValidate(ScopedContext().context, &cbinary, &diagnostic_);
     if (status != SPV_SUCCESS) {
@@ -855,8 +857,8 @@ TEST_P(OpTypeArrayLengthTest, LengthNegative) {
 // capability prohibits usage of signed integers, we can skip 8-bit integers
 // here since the purpose of these tests is to check the validity of
 // OpTypeArray, not OpTypeInt.
-INSTANTIATE_TEST_CASE_P(Widths, OpTypeArrayLengthTest,
-                        ValuesIn(std::vector<int>{16, 32, 64}));
+INSTANTIATE_TEST_SUITE_P(Widths, OpTypeArrayLengthTest,
+                         ValuesIn(std::vector<int>{16, 32, 64}));
 
 TEST_F(ValidateIdWithMessage, OpTypeArrayLengthNull) {
   std::string spirv = kGLSL450MemoryModel + R"(
@@ -2104,6 +2106,29 @@ OpFunctionEnd
   EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
 }
 
+TEST_F(ValidateIdWithMessage, OpVariableContainsRayPayloadBoolGood) {
+  std::string spirv = R"(
+OpCapability RayTracingNV
+OpCapability Shader
+OpCapability Linkage
+OpExtension "SPV_NV_ray_tracing"
+OpMemoryModel Logical GLSL450
+%bool = OpTypeBool
+%PerRayData = OpTypeStruct %bool
+%_ptr_PerRayData = OpTypePointer RayPayloadNV %PerRayData
+%var = OpVariable %_ptr_PerRayData RayPayloadNV
+%void = OpTypeVoid
+%fnty = OpTypeFunction %void
+%main = OpFunction %void None %fnty
+%entry = OpLabel
+%load = OpLoad %PerRayData %var
+OpReturn
+OpFunctionEnd
+)";
+  CompileSuccessfully(spirv.c_str());
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
+}
+
 TEST_F(ValidateIdWithMessage, OpVariablePointerNoVariablePointersBad) {
   const std::string spirv = R"(
 OpCapability Shader
@@ -2145,6 +2170,47 @@ OpMemoryModel Logical GLSL450
 %var = OpVariable %_ptr_function_ptr Function
 OpReturn
 OpFunctionEnd
+)";
+
+  auto options = getValidatorOptions();
+  options->relax_logical_pointer = true;
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
+}
+
+TEST_F(ValidateIdWithMessage, OpFunctionWithNonMemoryObject) {
+  // DXC generates code that looks like when given something like:
+  //   T t;
+  //   t.s.fn_1();
+  // This needs to be accepted before legalization takes place, so we
+  // will include it with the relaxed logical pointer.
+
+  const std::string spirv = R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Vertex %1 "main"
+               OpSource HLSL 600
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+       %void = OpTypeVoid
+          %9 = OpTypeFunction %void
+  %_struct_5 = OpTypeStruct
+  %_struct_6 = OpTypeStruct %_struct_5
+%_ptr_Function__struct_6 = OpTypePointer Function %_struct_6
+%_ptr_Function__struct_5 = OpTypePointer Function %_struct_5
+         %23 = OpTypeFunction %void %_ptr_Function__struct_5
+          %1 = OpFunction %void None %9
+         %10 = OpLabel
+         %11 = OpVariable %_ptr_Function__struct_6 Function
+         %20 = OpAccessChain %_ptr_Function__struct_5 %11 %int_0
+         %21 = OpFunctionCall %void %12 %20
+               OpReturn
+               OpFunctionEnd
+         %12 = OpFunction %void None %23
+         %13 = OpFunctionParameter %_ptr_Function__struct_5
+         %14 = OpLabel
+               OpReturn
+               OpFunctionEnd
 )";
 
   auto options = getValidatorOptions();
@@ -2249,6 +2315,7 @@ void createVariablePointerSpirvProgram(std::ostringstream* spirv,
     *spirv << "OpCapability VariablePointers ";
     *spirv << "OpExtension \"SPV_KHR_variable_pointers\" ";
   }
+  *spirv << "OpExtension \"SPV_KHR_storage_buffer_storage_class\" ";
   *spirv << R"(
     OpMemoryModel Logical GLSL450
     OpEntryPoint GLCompute %main "main"
@@ -2257,12 +2324,12 @@ void createVariablePointerSpirvProgram(std::ostringstream* spirv,
     %bool      = OpTypeBool
     %i32       = OpTypeInt 32 1
     %f32       = OpTypeFloat 32
-    %f32ptr    = OpTypePointer Uniform %f32
+    %f32ptr    = OpTypePointer StorageBuffer %f32
     %i         = OpConstant %i32 1
     %zero      = OpConstant %i32 0
     %float_1   = OpConstant %f32 1.0
-    %ptr1      = OpVariable %f32ptr Uniform
-    %ptr2      = OpVariable %f32ptr Uniform
+    %ptr1      = OpVariable %f32ptr StorageBuffer
+    %ptr2      = OpVariable %f32ptr StorageBuffer
   )";
   if (add_helper_function) {
     *spirv << R"(
@@ -2881,7 +2948,7 @@ TEST_F(ValidateIdWithMessage, OpStoreLabel) {
   CompileSuccessfully(spirv.c_str());
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpStore Object <id> '7[%7]' is not an object."));
+              HasSubstr("Operand 7[%7] requires a type"));
 }
 
 // TODO: enable when this bug is fixed:
@@ -3101,13 +3168,13 @@ TEST_F(ValidateIdWithMessage, OpCopyMemorySizedTargetBad) {
 %7 = OpTypeFunction %1
 %8 = OpFunction %1 None %7
 %9 = OpLabel
-     OpCopyMemorySized %9 %6 %5 None
+     OpCopyMemorySized %5 %5 %5 None
      OpReturn
      OpFunctionEnd)";
   CompileSuccessfully(spirv.c_str());
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Target operand <id> '9[%9]' is not a pointer."));
+              HasSubstr("Target operand <id> '5[%uint_4]' is not a pointer."));
 }
 TEST_F(ValidateIdWithMessage, OpCopyMemorySizedSourceBad) {
   std::string spirv = kGLSL450MemoryModel + R"(
@@ -3893,7 +3960,7 @@ OpFunctionEnd
 }
 
 // Run tests for Access Chain Instructions.
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CheckAccessChainInstructions, AccessChainInstructionTest,
     ::testing::Values("OpAccessChain", "OpInBoundsAccessChain",
                       "OpPtrAccessChain", "OpInBoundsPtrAccessChain"));
@@ -4979,8 +5046,7 @@ TEST_F(ValidateIdWithMessage, OpReturnValueIsLabel) {
   CompileSuccessfully(spirv.c_str());
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpReturnValue Value <id> '5[%5]' does not represent a "
-                        "value."));
+              HasSubstr("Operand 5[%5] requires a type"));
 }
 
 TEST_F(ValidateIdWithMessage, OpReturnValueIsVoid) {
@@ -6137,20 +6203,22 @@ TEST_F(ValidateIdWithMessage, IdDefInUnreachableBlock1) {
 %4 = OpTypeFunction %3
 %5 = OpFunction %1 None %2
 %6 = OpLabel
-%7 = OpFunctionCall %3 %8
+OpReturn
+%7 = OpLabel
+%8 = OpFunctionCall %3 %9
 OpUnreachable
 OpFunctionEnd
-%8 = OpFunction %3 None %4
-%9 = OpLabel
-OpReturnValue %7
+%9 = OpFunction %3 None %4
+%10 = OpLabel
+OpReturnValue %8
 OpFunctionEnd
 )";
 
   CompileSuccessfully(spirv, SPV_ENV_UNIVERSAL_1_3);
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("ID 7[%7] defined in block 6[%6] does not dominate its "
-                        "use in block 9[%9]\n  %9 = OpLabel"));
+              HasSubstr("ID 8[%8] defined in block 7[%7] does not dominate its "
+                        "use in block 10[%10]\n  %10 = OpLabel"));
 }
 
 TEST_F(ValidateIdWithMessage, IdDefInUnreachableBlock2) {
