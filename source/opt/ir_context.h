@@ -76,7 +76,9 @@ class IRContext {
     kAnalysisStructuredCFG = 1 << 11,
     kAnalysisBuiltinVarId = 1 << 12,
     kAnalysisIdToFuncMapping = 1 << 13,
-    kAnalysisEnd = 1 << 14
+    kAnalysisConstants = 1 << 14,
+    kAnalysisTypes = 1 << 15,
+    kAnalysisEnd = 1 << 16
   };
 
   using ProcessFunction = std::function<bool(Function*)>;
@@ -292,8 +294,9 @@ class IRContext {
   // created yet, it creates one.  NOTE: Once created, the constant manager
   // remains active and it is never re-built.
   analysis::ConstantManager* get_constant_mgr() {
-    if (!constant_mgr_)
-      constant_mgr_ = MakeUnique<analysis::ConstantManager>(this);
+    if (!AreAnalysesValid(kAnalysisConstants)) {
+      BuildConstantManager();
+    }
     return constant_mgr_.get();
   }
 
@@ -301,8 +304,9 @@ class IRContext {
   // yet, it creates one. NOTE: Once created, the type manager remains active it
   // is never re-built.
   analysis::TypeManager* get_type_mgr() {
-    if (!type_mgr_)
-      type_mgr_ = MakeUnique<analysis::TypeManager>(consumer(), this);
+    if (!AreAnalysesValid(kAnalysisTypes)) {
+      BuildTypeManager();
+    }
     return type_mgr_.get();
   }
 
@@ -452,7 +456,16 @@ class IRContext {
 
   // Return the next available SSA id and increment it.  Returns 0 if the
   // maximum SSA id has been reached.
-  inline uint32_t TakeNextId() { return module()->TakeNextIdBound(); }
+  inline uint32_t TakeNextId() {
+    uint32_t next_id = module()->TakeNextIdBound();
+    if (next_id == 0) {
+      if (consumer()) {
+        std::string message = "ID overflow. Try running compact-ids.";
+        consumer()(SPV_MSG_ERROR, "", {0, 0, 0}, message.c_str());
+      }
+    }
+    return next_id;
+  }
 
   FeatureManager* get_feature_mgr() {
     if (!feature_mgr_.get()) {
@@ -478,10 +491,10 @@ class IRContext {
   uint32_t max_id_bound() const { return max_id_bound_; }
   void set_max_id_bound(uint32_t new_bound) { max_id_bound_ = new_bound; }
 
-  // Return id of variable only decorated with |builtin|, if in module.
+  // Return id of input variable only decorated with |builtin|, if in module.
   // Create variable and return its id otherwise. If builtin not currently
   // supported, return 0.
-  uint32_t GetBuiltinVarId(uint32_t builtin);
+  uint32_t GetBuiltinInputVarId(uint32_t builtin);
 
   // Returns the function whose id is |id|, if one exists.  Returns |nullptr|
   // otherwise.
@@ -584,6 +597,20 @@ class IRContext {
     valid_analyses_ = valid_analyses_ | kAnalysisStructuredCFG;
   }
 
+  // Builds the constant manager from scratch, even if it was already
+  // valid.
+  void BuildConstantManager() {
+    constant_mgr_ = MakeUnique<analysis::ConstantManager>(this);
+    valid_analyses_ = valid_analyses_ | kAnalysisConstants;
+  }
+
+  // Builds the type manager from scratch, even if it was already
+  // valid.
+  void BuildTypeManager() {
+    type_mgr_ = MakeUnique<analysis::TypeManager>(consumer(), this);
+    valid_analyses_ = valid_analyses_ | kAnalysisTypes;
+  }
+
   // Removes all computed dominator and post-dominator trees. This will force
   // the context to rebuild the trees on demand.
   void ResetDominatorAnalysis() {
@@ -630,9 +657,9 @@ class IRContext {
   // true if the cfg is invalidated.
   bool CheckCFG();
 
-  // Return id of variable only decorated with |builtin|, if in module.
+  // Return id of input variable only decorated with |builtin|, if in module.
   // Return 0 otherwise.
-  uint32_t FindBuiltinVar(uint32_t builtin);
+  uint32_t FindBuiltinInputVar(uint32_t builtin);
 
   // Add |var_id| to all entry points in module.
   void AddVarToEntryPoints(uint32_t var_id);

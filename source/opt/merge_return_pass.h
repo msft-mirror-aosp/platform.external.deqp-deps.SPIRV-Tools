@@ -104,7 +104,7 @@ class MergeReturnPass : public MemPass {
   Status Process() override;
 
   IRContext::Analysis GetPreservedAnalyses() override {
-    return IRContext::kAnalysisNone;
+    return IRContext::kAnalysisConstants | IRContext::kAnalysisTypes;
   }
 
  private:
@@ -219,16 +219,18 @@ class MergeReturnPass : public MemPass {
                        std::list<BasicBlock*>* order);
 
   // Add a conditional branch at the start of |block| that either jumps to
-  // |merge_block| or the original code in |block| depending on the value in
-  // |return_flag_|.
+  // the merge block of |loop_merge_inst| or the original code in |block|
+  // depending on the value in |return_flag_|.  The continue target in
+  // |loop_merge_inst| will be updated if needed.
   //
   // If new blocks that are created will be added to |order|.  This way a call
   // can traverse these new block in structured order.
   //
   // Returns true if successful.
-  bool BreakFromConstruct(BasicBlock* block, BasicBlock* merge_block,
+  bool BreakFromConstruct(BasicBlock* block,
                           std::unordered_set<BasicBlock*>* predicated,
-                          std::list<BasicBlock*>* order);
+                          std::list<BasicBlock*>* order,
+                          Instruction* loop_merge_inst);
 
   // Add an |OpReturn| or |OpReturnValue| to the end of |block|.  If an
   // |OpReturnValue| is needed, the return value is loaded from |return_value_|.
@@ -238,12 +240,11 @@ class MergeReturnPass : public MemPass {
   // return block at the end of the pass.
   void CreateReturnBlock();
 
-  // Creates a Phi node in |merge_block| for the result of |inst| coming from
-  // |predecessor|.  Any uses of the result of |inst| that are no longer
+  // Creates a Phi node in |merge_block| for the result of |inst|.
+  // Any uses of the result of |inst| that are no longer
   // dominated by |inst|, are replaced with the result of the new |OpPhi|
   // instruction.
-  void CreatePhiNodesForInst(BasicBlock* merge_block, uint32_t predecessor,
-                             Instruction& inst);
+  void CreatePhiNodesForInst(BasicBlock* merge_block, Instruction& inst);
 
   // Traverse the nodes in |new_merge_nodes_|, and adds the OpPhi instructions
   // that are needed to make the code correct.  It is assumed that at this point
@@ -275,6 +276,8 @@ class MergeReturnPass : public MemPass {
   // new edge from |new_source|.  The value for that edge will be an Undef. If
   // |target| only had a single predecessor, then it is marked as needing new
   // phi nodes.  See |MarkForNewPhiNodes|.
+  //
+  // The CFG must not include the edge from |new_source| to |target| yet.
   void UpdatePhiNodes(BasicBlock* new_source, BasicBlock* target);
 
   StructuredControlState& CurrentState() { return state_.back(); }
@@ -327,6 +330,11 @@ class MergeReturnPass : public MemPass {
   // values that will need a phi on the new edges.
   std::unordered_map<BasicBlock*, BasicBlock*> new_merge_nodes_;
   bool HasNontrivialUnreachableBlocks(Function* function);
+
+  // Contains all return blocks that are merged. This is set is populated while
+  // processing structured blocks and used to properly construct OpPhi
+  // instructions.
+  std::unordered_set<uint32_t> return_blocks_;
 };
 
 }  // namespace opt

@@ -48,21 +48,36 @@ spv_result_t ValidateMemorySemantics(ValidationState_t& _,
   }
 
   if (spvIsWebGPUEnv(_.context()->target_env)) {
-    uint32_t valid_bits = SpvMemorySemanticsAcquireMask |
-                          SpvMemorySemanticsReleaseMask |
-                          SpvMemorySemanticsAcquireReleaseMask |
-                          SpvMemorySemanticsUniformMemoryMask |
+    uint32_t valid_bits = SpvMemorySemanticsUniformMemoryMask |
                           SpvMemorySemanticsWorkgroupMemoryMask |
                           SpvMemorySemanticsImageMemoryMask |
                           SpvMemorySemanticsOutputMemoryKHRMask |
                           SpvMemorySemanticsMakeAvailableKHRMask |
                           SpvMemorySemanticsMakeVisibleKHRMask;
+    if (!spvOpcodeIsAtomicOp(inst->opcode())) {
+      valid_bits |= SpvMemorySemanticsAcquireReleaseMask;
+    }
+
     if (value & ~valid_bits) {
+      if (spvOpcodeIsAtomicOp(inst->opcode())) {
+        return _.diag(SPV_ERROR_INVALID_DATA, inst)
+               << "WebGPU spec disallows, for OpAtomic*, any bit masks in "
+                  "Memory Semantics that are not UniformMemory, "
+                  "WorkgroupMemory, ImageMemory, or OutputMemoryKHR";
+      } else {
+        return _.diag(SPV_ERROR_INVALID_DATA, inst)
+               << "WebGPU spec disallows any bit masks in Memory Semantics "
+                  "that are not AcquireRelease, UniformMemory, "
+                  "WorkgroupMemory, ImageMemory, OutputMemoryKHR, "
+                  "MakeAvailableKHR, or MakeVisibleKHR";
+      }
+    }
+
+    if (!spvOpcodeIsAtomicOp(inst->opcode()) &&
+        !(value & SpvMemorySemanticsAcquireReleaseMask)) {
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
-             << "WebGPU spec disallows any bit masks in Memory Semantics that "
-                "are not Acquire, Release, AcquireRelease, UniformMemory, "
-                "WorkgroupMemory, ImageMemory, OutputMemoryKHR, "
-                "MakeAvailableKHR, or MakeVisibleKHR";
+             << "WebGPU spec requires AcquireRelease to set in Memory "
+                "Semantics.";
     }
   }
 
@@ -119,15 +134,8 @@ spv_result_t ValidateMemorySemantics(ValidationState_t& _,
            << ": Memory Semantics UniformMemory requires capability Shader";
   }
 
-  // Disabling this check until
-  // https://github.com/KhronosGroup/glslang/issues/1618 is resolved.
-  //   if (value & SpvMemorySemanticsAtomicCounterMemoryMask &&
-  //      !_.HasCapability(SpvCapabilityAtomicStorage)) {
-  //    return _.diag(SPV_ERROR_INVALID_DATA, inst)
-  //           << spvOpcodeString(opcode)
-  //           << ": Memory Semantics AtomicCounterMemory requires capability "
-  //              "AtomicStorage";
-  //  }
+  // Checking for SpvCapabilityAtomicStorage is intentionally not done here. See
+  // https://github.com/KhronosGroup/glslang/issues/1618 for the reasoning why.
 
   if (value & (SpvMemorySemanticsMakeAvailableKHRMask |
                SpvMemorySemanticsMakeVisibleKHRMask)) {

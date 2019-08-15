@@ -101,7 +101,7 @@ macro(spvtools_opencl_tables CONFIG_VERSION)
   list(APPEND EXTINST_CPP_DEPENDS ${GRAMMAR_INC_FILE})
 endmacro(spvtools_opencl_tables)
 
-macro(spvtools_vendor_tables VENDOR_TABLE)
+macro(spvtools_vendor_tables VENDOR_TABLE SHORT_NAME)
   set(INSTS_FILE "${spirv-tools_BINARY_DIR}/${VENDOR_TABLE}.insts.inc")
   set(GRAMMAR_FILE "${spirv-tools_SOURCE_DIR}/source/extinst.${VENDOR_TABLE}.grammar.json")
   add_custom_command(OUTPUT ${INSTS_FILE}
@@ -110,9 +110,9 @@ macro(spvtools_vendor_tables VENDOR_TABLE)
       --vendor-insts-output=${INSTS_FILE}
     DEPENDS ${GRAMMAR_PROCESSING_SCRIPT} ${GRAMMAR_FILE}
     COMMENT "Generate extended instruction tables for ${VENDOR_TABLE}.")
-  list(APPEND EXTINST_CPP_DEPENDS ${INSTS_FILE})
-  add_custom_target(spirv-tools-${VENDOR_TABLE} DEPENDS ${INSTS_FILE})
-  set_property(TARGET spirv-tools-${VENDOR_TABLE} PROPERTY FOLDER "SPIRV-Tools build")
+  add_custom_target(spv-tools-${SHORT_NAME} DEPENDS ${INSTS_FILE})
+  set_property(TARGET spv-tools-${SHORT_NAME} PROPERTY FOLDER "SPIRV-Tools build")
+  list(APPEND EXTINST_CPP_DEPENDS spv-tools-${SHORT_NAME})
 endmacro(spvtools_vendor_tables)
 
 macro(spvtools_extinst_lang_headers NAME GRAMMAR_FILE)
@@ -125,20 +125,20 @@ macro(spvtools_extinst_lang_headers NAME GRAMMAR_FILE)
       --extinst-output-base=${OUTBASE}
     DEPENDS ${LANG_HEADER_PROCESSING_SCRIPT} ${GRAMMAR_FILE}
     COMMENT "Generate language specific header for ${NAME}.")
-  list(APPEND EXTINST_CPP_DEPENDS ${OUT_H})
   add_custom_target(spirv-tools-header-${NAME} DEPENDS ${OUT_H})
   set_property(TARGET spirv-tools-header-${NAME} PROPERTY FOLDER "SPIRV-Tools build")
+  list(APPEND EXTINST_CPP_DEPENDS spirv-tools-header-${NAME})
 endmacro(spvtools_extinst_lang_headers)
 
 spvtools_core_tables("unified1")
 spvtools_enum_string_mapping("unified1")
 spvtools_opencl_tables("unified1")
 spvtools_glsl_tables("unified1")
-spvtools_vendor_tables("spv-amd-shader-explicit-vertex-parameter")
-spvtools_vendor_tables("spv-amd-shader-trinary-minmax")
-spvtools_vendor_tables("spv-amd-gcn-shader")
-spvtools_vendor_tables("spv-amd-shader-ballot")
-spvtools_vendor_tables("debuginfo")
+spvtools_vendor_tables("spv-amd-shader-explicit-vertex-parameter" "spv-amd-sevp")
+spvtools_vendor_tables("spv-amd-shader-trinary-minmax" "spv-amd-stm")
+spvtools_vendor_tables("spv-amd-gcn-shader" "spv-amd-gs")
+spvtools_vendor_tables("spv-amd-shader-ballot" "spv-amd-sb")
+spvtools_vendor_tables("debuginfo" "debuginfo")
 spvtools_extinst_lang_headers("DebugInfo" ${DEBUGINFO_GRAMMAR_JSON_FILE})
 
 spvtools_vimsyntax("unified1" "1.0")
@@ -159,36 +159,18 @@ list(APPEND OPCODE_CPP_DEPENDS ${GENERATOR_INC_FILE})
 # The following .cpp files include the above generated .inc files.
 # Add those .inc files as their dependencies.
 #
-# Why using such an awkward way?
-# * If we use add_custom_target() to define a target to generate all .inc files
-#   and let ${SPIRV_TOOLS} depend on it, then we need to run ninja twice every
-#   time the grammar is updated: the first time is for generating those .inc
-#   files, and the second time is for rebuilding .cpp files, when ninja finds
-#   out that .inc files are updated.
-# * If we use add_custom_command() with PRE_BUILD, then the grammar processing
-#   script will always run no matter whether the grammar is updated.
-# * add_dependencies() is used to add *target* dependencies to a target.
-# * The following solution only generates .inc files when the script or the
-#   grammar files is updated, and in a single ninja run.
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/opcode.cpp
-  PROPERTIES OBJECT_DEPENDS "${OPCODE_CPP_DEPENDS}")
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/operand.cpp
-  PROPERTIES OBJECT_DEPENDS "${OPERAND_CPP_DEPENDS}")
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext_inst.cpp
-  PROPERTIES OBJECT_DEPENDS "${EXTINST_CPP_DEPENDS}")
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/enum_string_mapping.cpp
-  PROPERTIES OBJECT_DEPENDS "${ENUM_STRING_MAPPING_CPP_DEPENDS}")
+# We need to wrap the .inc files with a custom target to avoid problems when
+# multiple targets depend on the same custom command.
+add_custom_target(core_tables
+  DEPENDS ${OPCODE_CPP_DEPENDS} ${OPERAND_CPP_DEPENDS})
+add_custom_target(enum_string_mapping
+  DEPENDS ${EXTENSION_H_DEPENDS} ${ENUM_STRING_MAPPING_CPP_DEPENDS})
+add_custom_target(extinst_tables
+  DEPENDS ${EXTINST_CPP_DEPENDS})
 
 set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/extensions.h
   PROPERTIES HEADER_FILE_ONLY TRUE)
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/extensions.h
-  PROPERTIES OBJECT_DEPENDS "${EXTENSION_H_DEPENDS}")
 
 set(SPIRV_TOOLS_BUILD_VERSION_INC
   ${spirv-tools_BINARY_DIR}/build-version.inc)
@@ -214,9 +196,9 @@ set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/pch_source.cpp
   PROPERTIES OBJECT_DEPENDS "${PCH_DEPENDS}")
 
-add_subdirectory(comp)
 add_subdirectory(opt)
 add_subdirectory(reduce)
+add_subdirectory(fuzz)
 add_subdirectory(link)
 
 set(SPIRV_SOURCES
@@ -239,7 +221,6 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/enum_string_mapping.h
   ${CMAKE_CURRENT_SOURCE_DIR}/ext_inst.h
   ${CMAKE_CURRENT_SOURCE_DIR}/extensions.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/id_descriptor.h
   ${CMAKE_CURRENT_SOURCE_DIR}/instruction.h
   ${CMAKE_CURRENT_SOURCE_DIR}/latest_version_glsl_std_450_header.h
   ${CMAKE_CURRENT_SOURCE_DIR}/latest_version_opencl_std_header.h
@@ -253,6 +234,7 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_constant.h
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_definition.h
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_endian.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/spirv_fuzzer_options.h
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_optimizer_options.h
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_reducer_options.h
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_target_env.h
@@ -272,7 +254,6 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/enum_string_mapping.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ext_inst.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/extensions.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/id_descriptor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/libspirv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/name_mapper.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/opcode.cpp
@@ -281,6 +262,7 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/print.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/software_version.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_endian.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/spirv_fuzzer_options.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_optimizer_options.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_reducer_options.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/spirv_target_env.cpp
@@ -317,6 +299,7 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_logicals.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_memory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_memory_semantics.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_misc.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_mode_setting.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_non_uniform.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_primitives.cpp
@@ -361,6 +344,7 @@ target_include_directories(${SPIRV_TOOLS}
   )
 set_property(TARGET ${SPIRV_TOOLS} PROPERTY FOLDER "SPIRV-Tools libraries")
 spvtools_check_symbol_exports(${SPIRV_TOOLS})
+add_dependencies( ${SPIRV_TOOLS} core_tables enum_string_mapping extinst_tables )
 
 add_library(${SPIRV_TOOLS}-shared SHARED ${SPIRV_SOURCES})
 spvtools_default_compile_options(${SPIRV_TOOLS}-shared)
@@ -376,6 +360,15 @@ target_compile_definitions(${SPIRV_TOOLS}-shared
   PRIVATE SPIRV_TOOLS_IMPLEMENTATION
   PUBLIC SPIRV_TOOLS_SHAREDLIB
 )
+add_dependencies( ${SPIRV_TOOLS}-shared core_tables enum_string_mapping extinst_tables )
+
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+  find_library(LIBRT rt)
+  if(LIBRT)
+    target_link_libraries(${SPIRV_TOOLS} ${LIBRT})
+    target_link_libraries(${SPIRV_TOOLS}-shared ${LIBRT})
+  endif()
+endif()
 
 if(ENABLE_SPIRV_TOOLS_INSTALL)
   install(TARGETS ${SPIRV_TOOLS} ${SPIRV_TOOLS}-shared
