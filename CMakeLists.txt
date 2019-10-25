@@ -39,6 +39,8 @@ option(SPIRV_ALLOW_TIMERS "Allow timers via clock_gettime on supported platforms
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   add_definitions(-DSPIRV_LINUX)
   set(SPIRV_TIMER_ENABLED ${SPIRV_ALLOW_TIMERS})
+elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Emscripten")
+    add_definitions(-DSPIRV_EMSCRIPTEN)
 elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
   add_definitions(-DSPIRV_WINDOWS)
 elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
@@ -234,6 +236,21 @@ macro(spvtools_pch SRCS PCHPREFIX)
 endmacro(spvtools_pch)
 
 add_subdirectory(external)
+
+# Warning about extra semi-colons.
+#
+# This is not supported on all compilers/versions. so enabling only
+# for clang, since that works for all versions that our bots run.
+#
+# This is intentionally done after adding the external subdirectory,
+# so we don't enforce this flag on our dependencies, some of which do
+# not pass it.
+#
+# If the minimum version of CMake supported is updated to 3.0 or
+# later, then check_cxx_compiler_flag could be used instead.
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options("-Wextra-semi")
+endif()
 
 add_subdirectory(source)
 add_subdirectory(tools)

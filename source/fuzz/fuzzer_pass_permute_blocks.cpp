@@ -57,22 +57,19 @@ void FuzzerPassPermuteBlocks::Apply() {
     // would provide more freedom for A to move.
     for (auto id = block_ids.rbegin(); id != block_ids.rend(); ++id) {
       // Randomly decide whether to ignore the block id.
-      if (GetFuzzerContext()->GetRandomGenerator()->RandomPercentage() >
-          GetFuzzerContext()->GetChanceOfMovingBlockDown()) {
+      if (!GetFuzzerContext()->ChoosePercentage(
+              GetFuzzerContext()->GetChanceOfMovingBlockDown())) {
         continue;
       }
       // Keep pushing the block down, until pushing down fails.
       // The loop is guaranteed to terminate because a block cannot be pushed
       // down indefinitely.
       while (true) {
-        protobufs::TransformationMoveBlockDown message;
-        message.set_block_id(*id);
-        if (transformation::IsApplicable(message, GetIRContext(),
-                                         *GetFactManager())) {
-          transformation::Apply(message, GetIRContext(), GetFactManager());
-          *GetTransformations()
-               ->add_transformation()
-               ->mutable_move_block_down() = message;
+        TransformationMoveBlockDown transformation(*id);
+        if (transformation.IsApplicable(GetIRContext(), *GetFactManager())) {
+          transformation.Apply(GetIRContext(), GetFactManager());
+          *GetTransformations()->add_transformation() =
+              transformation.ToMessage();
         } else {
           break;
         }
