@@ -161,6 +161,18 @@ class OptimizerOptions {
     spvOptimizerOptionsSetMaxIdBound(options_, new_bound);
   }
 
+  // Records whether all bindings within the module should be preserved.
+  void set_preserve_bindings(bool preserve_bindings) {
+    spvOptimizerOptionsSetPreserveBindings(options_, preserve_bindings);
+  }
+
+  // Records whether all specialization constants within the module
+  // should be preserved.
+  void set_preserve_spec_constants(bool preserve_spec_constants) {
+    spvOptimizerOptionsSetPreserveSpecConstants(options_,
+                                                preserve_spec_constants);
+  }
+
  private:
   spv_optimizer_options options_;
 };
@@ -202,9 +214,19 @@ class FuzzerOptions {
     return options_;
   }
 
+  // See spvFuzzerOptionsEnableReplayValidation.
+  void enable_replay_validation() {
+    spvFuzzerOptionsEnableReplayValidation(options_);
+  }
+
   // See spvFuzzerOptionsSetRandomSeed.
   void set_random_seed(uint32_t seed) {
     spvFuzzerOptionsSetRandomSeed(options_, seed);
+  }
+
+  // See spvFuzzerOptionsSetShrinkerStepLimit.
+  void set_shrinker_step_limit(uint32_t shrinker_step_limit) {
+    spvFuzzerOptionsSetShrinkerStepLimit(options_, shrinker_step_limit);
   }
 
  private:
