@@ -47,7 +47,7 @@ inline bool IsTypeInst(SpvOp opcode) {
          opcode == SpvOpTypePipeStorage || opcode == SpvOpTypeNamedBarrier ||
          opcode == SpvOpTypeAccelerationStructureNV ||
          opcode == SpvOpTypeAccelerationStructureKHR ||
-         opcode == SpvOpTypeRayQueryProvisionalKHR ||
+         opcode == SpvOpTypeRayQueryKHR ||
          opcode == SpvOpTypeCooperativeMatrixNV;
 }
 inline bool IsConstantInst(SpvOp opcode) {
@@ -60,7 +60,8 @@ inline bool IsSpecConstantInst(SpvOp opcode) {
   return opcode >= SpvOpSpecConstantTrue && opcode <= SpvOpSpecConstantOp;
 }
 inline bool IsTerminatorInst(SpvOp opcode) {
-  return opcode >= SpvOpBranch && opcode <= SpvOpUnreachable;
+  return (opcode >= SpvOpBranch && opcode <= SpvOpUnreachable) ||
+         (opcode == SpvOpTerminateInvocation);
 }
 
 }  // namespace opt
