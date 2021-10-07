@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_
-#define SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_
+#ifndef SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_H_
+#define SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_H_
 
 #include "source/fuzz/fuzzer_pass.h"
 
@@ -29,12 +29,10 @@ class FuzzerPassSplitBlocks : public FuzzerPass {
                         FuzzerContext* fuzzer_context,
                         protobufs::TransformationSequence* transformations);
 
-  ~FuzzerPassSplitBlocks() override;
-
   void Apply() override;
 };
 
 }  // namespace fuzz
 }  // namespace spvtools
 
-#endif  // SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_
+#endif  // SOURCE_FUZZ_FUZZER_PASS_SPLIT_BLOCKS_H_

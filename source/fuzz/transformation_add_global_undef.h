@@ -26,7 +26,7 @@ namespace fuzz {
 class TransformationAddGlobalUndef : public Transformation {
  public:
   explicit TransformationAddGlobalUndef(
-      const protobufs::TransformationAddGlobalUndef& message);
+      protobufs::TransformationAddGlobalUndef message);
 
   TransformationAddGlobalUndef(uint32_t fresh_id, uint32_t type_id);
 
@@ -40,6 +40,8 @@ class TransformationAddGlobalUndef : public Transformation {
   // type.  The instruction has result id |message_.fresh_id|.
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
+
+  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 

@@ -26,7 +26,7 @@ namespace fuzz {
 class TransformationAddGlobalVariable : public Transformation {
  public:
   explicit TransformationAddGlobalVariable(
-      const protobufs::TransformationAddGlobalVariable& message);
+      protobufs::TransformationAddGlobalVariable message);
 
   TransformationAddGlobalVariable(uint32_t fresh_id, uint32_t type_id,
                                   SpvStorageClass storage_class,
@@ -55,15 +55,11 @@ class TransformationAddGlobalVariable : public Transformation {
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
 
+  std::unordered_set<uint32_t> GetFreshIds() const override;
+
   protobufs::Transformation ToMessage() const override;
 
  private:
-  // Returns true if and only if the SPIR-V version being used requires that
-  // global variables accessed in the static call graph of an entry point need
-  // to be listed in that entry point's interface.
-  static bool GlobalVariablesMustBeDeclaredInEntryPointInterfaces(
-      opt::IRContext* ir_context);
-
   protobufs::TransformationAddGlobalVariable message_;
 };
 

@@ -29,8 +29,6 @@ FuzzerPassSplitBlocks::FuzzerPassSplitBlocks(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
-FuzzerPassSplitBlocks::~FuzzerPassSplitBlocks() = default;
-
 void FuzzerPassSplitBlocks::Apply() {
   // Gather up pointers to all the blocks in the module.  We are then able to
   // iterate over these pointers and split the blocks to which they point;
@@ -96,11 +94,7 @@ void FuzzerPassSplitBlocks::Apply() {
     // If the position we have chosen turns out to be a valid place to split
     // the block, we apply the split. Otherwise the block just doesn't get
     // split.
-    if (transformation.IsApplicable(GetIRContext(),
-                                    *GetTransformationContext())) {
-      transformation.Apply(GetIRContext(), GetTransformationContext());
-      *GetTransformations()->add_transformation() = transformation.ToMessage();
-    }
+    MaybeApplyTransformation(transformation);
   }
 }
 

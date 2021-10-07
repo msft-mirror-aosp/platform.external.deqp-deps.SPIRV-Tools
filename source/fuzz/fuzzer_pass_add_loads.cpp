@@ -27,8 +27,6 @@ FuzzerPassAddLoads::FuzzerPassAddLoads(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
-FuzzerPassAddLoads::~FuzzerPassAddLoads() = default;
-
 void FuzzerPassAddLoads::Apply() {
   ForEachInstructionWithInstructionDescriptor(
       [this](opt::Function* function, opt::BasicBlock* block,
@@ -60,7 +58,7 @@ void FuzzerPassAddLoads::Apply() {
                   if (!instruction->result_id() || !instruction->type_id()) {
                     return false;
                   }
-                  switch (instruction->result_id()) {
+                  switch (instruction->opcode()) {
                     case SpvOpConstantNull:
                     case SpvOpUndef:
                       // Do not allow loading from a null or undefined pointer;

@@ -26,7 +26,7 @@ namespace fuzz {
 class TransformationMergeBlocks : public Transformation {
  public:
   explicit TransformationMergeBlocks(
-      const protobufs::TransformationMergeBlocks& message);
+      protobufs::TransformationMergeBlocks message);
 
   TransformationMergeBlocks(uint32_t block_id);
 
@@ -43,6 +43,8 @@ class TransformationMergeBlocks : public Transformation {
   // the terminator of b.  Block b is removed from the module.
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
+
+  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 

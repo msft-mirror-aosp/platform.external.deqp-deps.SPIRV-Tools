@@ -20,8 +20,8 @@ namespace spvtools {
 namespace fuzz {
 
 TransformationAddGlobalVariable::TransformationAddGlobalVariable(
-    const spvtools::fuzz::protobufs::TransformationAddGlobalVariable& message)
-    : message_(message) {}
+    spvtools::fuzz::protobufs::TransformationAddGlobalVariable message)
+    : message_(std::move(message)) {}
 
 TransformationAddGlobalVariable::TransformationAddGlobalVariable(
     uint32_t fresh_id, uint32_t type_id, SpvStorageClass storage_class,
@@ -93,42 +93,18 @@ bool TransformationAddGlobalVariable::IsApplicable(
 void TransformationAddGlobalVariable::Apply(
     opt::IRContext* ir_context,
     TransformationContext* transformation_context) const {
-  opt::Instruction::OperandList input_operands;
-  input_operands.push_back(
-      {SPV_OPERAND_TYPE_STORAGE_CLASS, {message_.storage_class()}});
-  if (message_.initializer_id()) {
-    input_operands.push_back(
-        {SPV_OPERAND_TYPE_ID, {message_.initializer_id()}});
-  }
-  ir_context->module()->AddGlobalValue(MakeUnique<opt::Instruction>(
-      ir_context, SpvOpVariable, message_.type_id(), message_.fresh_id(),
-      input_operands));
-  fuzzerutil::UpdateModuleIdBound(ir_context, message_.fresh_id());
+  opt::Instruction* new_instruction = fuzzerutil::AddGlobalVariable(
+      ir_context, message_.fresh_id(), message_.type_id(),
+      static_cast<SpvStorageClass>(message_.storage_class()),
+      message_.initializer_id());
 
-  if (GlobalVariablesMustBeDeclaredInEntryPointInterfaces(ir_context)) {
-    // Conservatively add this global to the interface of every entry point in
-    // the module.  This means that the global is available for other
-    // transformations to use.
-    //
-    // A downside of this is that the global will be in the interface even if it
-    // ends up never being used.
-    //
-    // TODO(https://github.com/KhronosGroup/SPIRV-Tools/issues/3111) revisit
-    //  this if a more thorough approach to entry point interfaces is taken.
-    for (auto& entry_point : ir_context->module()->entry_points()) {
-      entry_point.AddOperand({SPV_OPERAND_TYPE_ID, {message_.fresh_id()}});
-    }
-  }
+  // Inform the def-use manager about the new instruction.
+  ir_context->get_def_use_mgr()->AnalyzeInstDefUse(new_instruction);
 
   if (message_.value_is_irrelevant()) {
     transformation_context->GetFactManager()->AddFactValueOfPointeeIsIrrelevant(
         message_.fresh_id());
   }
-
-  // We have added an instruction to the module, so need to be careful about the
-  // validity of existing analyses.
-  ir_context->InvalidateAnalysesExceptFor(
-      opt::IRContext::Analysis::kAnalysisNone);
 }
 
 protobufs::Transformation TransformationAddGlobalVariable::ToMessage() const {
@@ -137,21 +113,9 @@ protobufs::Transformation TransformationAddGlobalVariable::ToMessage() const {
   return result;
 }
 
-bool TransformationAddGlobalVariable::
-    GlobalVariablesMustBeDeclaredInEntryPointInterfaces(
-        opt::IRContext* ir_context) {
-  // TODO(afd): We capture the universal environments for which this requirement
-  //  holds.  The check should be refined on demand for other target
-  //  environments.
-  switch (ir_context->grammar().target_env()) {
-    case SPV_ENV_UNIVERSAL_1_0:
-    case SPV_ENV_UNIVERSAL_1_1:
-    case SPV_ENV_UNIVERSAL_1_2:
-    case SPV_ENV_UNIVERSAL_1_3:
-      return false;
-    default:
-      return true;
-  }
+std::unordered_set<uint32_t> TransformationAddGlobalVariable::GetFreshIds()
+    const {
+  return {message_.fresh_id()};
 }
 
 }  // namespace fuzz

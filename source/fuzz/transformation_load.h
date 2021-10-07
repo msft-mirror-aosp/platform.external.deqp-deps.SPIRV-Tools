@@ -25,7 +25,7 @@ namespace fuzz {
 
 class TransformationLoad : public Transformation {
  public:
-  explicit TransformationLoad(const protobufs::TransformationLoad& message);
+  explicit TransformationLoad(protobufs::TransformationLoad message);
 
   TransformationLoad(
       uint32_t fresh_id, uint32_t pointer_id,
@@ -48,6 +48,8 @@ class TransformationLoad : public Transformation {
   // pointee type.
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
+
+  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 
