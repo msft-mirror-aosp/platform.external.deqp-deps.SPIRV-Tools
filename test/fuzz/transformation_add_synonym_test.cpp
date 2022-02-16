@@ -1242,10 +1242,9 @@ TEST(TransformationAddSynonymTest, MiscellaneousCopies) {
   ASSERT_TRUE(IsEqual(env, after_transformation, context.get()));
 }
 
-TEST(TransformationAddSynonymTest, DoNotCopyNullPointers) {
+TEST(TransformationAddSynonymTest, DoNotCopyNullOrUndefPointers) {
   std::string shader = R"(
                OpCapability Shader
-               OpCapability VariablePointers
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
                OpEntryPoint Fragment %4 "main"
@@ -1256,6 +1255,7 @@ TEST(TransformationAddSynonymTest, DoNotCopyNullPointers) {
           %6 = OpTypeInt 32 1
           %7 = OpTypePointer Function %6
           %8 = OpConstantNull %7
+          %9 = OpUndef %7
           %4 = OpFunction %2 None %3
           %5 = OpLabel
                OpReturn
@@ -1273,6 +1273,12 @@ TEST(TransformationAddSynonymTest, DoNotCopyNullPointers) {
   // Illegal to copy null.
   ASSERT_FALSE(TransformationAddSynonym(
                    8, protobufs::TransformationAddSynonym::COPY_OBJECT, 100,
+                   MakeInstructionDescriptor(5, SpvOpReturn, 0))
+                   .IsApplicable(context.get(), transformation_context));
+
+  // Illegal to copy an OpUndef of pointer type.
+  ASSERT_FALSE(TransformationAddSynonym(
+                   9, protobufs::TransformationAddSynonym::COPY_OBJECT, 100,
                    MakeInstructionDescriptor(5, SpvOpReturn, 0))
                    .IsApplicable(context.get(), transformation_context));
 }
