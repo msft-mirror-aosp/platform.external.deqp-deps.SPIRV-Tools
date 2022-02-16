@@ -31,8 +31,7 @@ class FuzzerPassDonateModules : public FuzzerPass {
       opt::IRContext* ir_context, TransformationContext* transformation_context,
       FuzzerContext* fuzzer_context,
       protobufs::TransformationSequence* transformations,
-      bool ignore_inapplicable_transformations,
-      std::vector<fuzzerutil::ModuleSupplier> donor_suppliers);
+      const std::vector<fuzzerutil::ModuleSupplier>& donor_suppliers);
 
   void Apply() override;
 
