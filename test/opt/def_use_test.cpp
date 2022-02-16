@@ -1656,7 +1656,7 @@ INSTANTIATE_TEST_SUITE_P(
           "OpGroupDecorate %1 %2 %3",
         },
       },
-      // member decorate
+      // memeber decorate
       {
         // code
         "OpMemberDecorate %1 0 RelaxedPrecision "
@@ -1707,10 +1707,9 @@ TEST_F(UpdateUsesTest, KeepOldUses) {
   def->SetInOperands({{SPV_OPERAND_TYPE_ID, {25}}});
   context->UpdateDefUse(def);
 
-  auto scanUser = [&](Instruction* user) { return user != use; };
-  bool userFound = !def_use_mgr->WhileEachUser(def, scanUser);
-
-  EXPECT_TRUE(userFound);
+  auto users = def_use_mgr->id_to_users();
+  UserEntry entry = {def, use};
+  EXPECT_THAT(users, Contains(entry));
 }
 // clang-format on
 
