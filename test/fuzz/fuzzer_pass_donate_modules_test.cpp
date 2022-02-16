@@ -210,7 +210,7 @@ TEST(FuzzerPassDonateModulesTest, BasicDonation) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -291,7 +291,7 @@ TEST(FuzzerPassDonateModulesTest, DonationWithUniforms) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -422,7 +422,7 @@ TEST(FuzzerPassDonateModulesTest, DonationWithInputAndOutputVariables) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -517,7 +517,7 @@ TEST(FuzzerPassDonateModulesTest, DonateFunctionTypeWithDifferentPointers) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -531,7 +531,6 @@ TEST(FuzzerPassDonateModulesTest, DonateOpConstantNull) {
   std::string recipient_shader = R"(
                OpCapability Shader
                OpCapability ImageQuery
-               OpCapability VariablePointers
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
                OpEntryPoint Fragment %4 "main"
@@ -549,7 +548,6 @@ TEST(FuzzerPassDonateModulesTest, DonateOpConstantNull) {
   std::string donor_shader = R"(
                OpCapability Shader
                OpCapability ImageQuery
-               OpCapability VariablePointers
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
                OpEntryPoint Fragment %4 "main"
@@ -589,7 +587,7 @@ TEST(FuzzerPassDonateModulesTest, DonateOpConstantNull) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -717,7 +715,7 @@ TEST(FuzzerPassDonateModulesTest, DonateCodeThatUsesImages) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -813,7 +811,7 @@ TEST(FuzzerPassDonateModulesTest, DonateCodeThatUsesSampler) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -945,7 +943,7 @@ TEST(FuzzerPassDonateModulesTest, DonateCodeThatUsesImageStructField) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -1081,7 +1079,7 @@ TEST(FuzzerPassDonateModulesTest, DonateCodeThatUsesImageFunctionParameter) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -1163,7 +1161,7 @@ TEST(FuzzerPassDonateModulesTest, DonateShaderWithImageStorageClass) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), true);
 
@@ -1250,7 +1248,7 @@ TEST(FuzzerPassDonateModulesTest, DonateComputeShaderWithRuntimeArray) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -1354,7 +1352,7 @@ TEST(FuzzerPassDonateModulesTest, DonateComputeShaderWithRuntimeArrayLivesafe) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), true);
 
@@ -1426,7 +1424,7 @@ TEST(FuzzerPassDonateModulesTest, DonateComputeShaderWithWorkgroupVariables) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), true);
 
@@ -1536,7 +1534,7 @@ TEST(FuzzerPassDonateModulesTest, DonateComputeShaderWithAtomics) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), true);
 
@@ -1720,7 +1718,7 @@ TEST(FuzzerPassDonateModulesTest, Miscellaneous1) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -1792,7 +1790,7 @@ TEST(FuzzerPassDonateModulesTest, OpSpecConstantInstructions) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -1949,7 +1947,7 @@ TEST(FuzzerPassDonateModulesTest, DonationSupportsOpTypeRuntimeArray) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), false);
 
@@ -2022,7 +2020,7 @@ TEST(FuzzerPassDonateModulesTest, HandlesCapabilities) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   ASSERT_TRUE(donor_context->get_feature_mgr()->HasCapability(
       SpvCapabilityVariablePointersStorageBuffer));
@@ -2255,7 +2253,7 @@ TEST(FuzzerPassDonateModulesTest, HandlesOpPhisInMergeBlock) {
 
   FuzzerPassDonateModules fuzzer_pass(recipient_context.get(),
                                       &transformation_context, &fuzzer_context,
-                                      &transformation_sequence, false, {});
+                                      &transformation_sequence, {});
 
   fuzzer_pass.DonateSingleModule(donor_context.get(), true);
 

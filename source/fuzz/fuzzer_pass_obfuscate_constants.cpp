@@ -30,10 +30,9 @@ namespace fuzz {
 FuzzerPassObfuscateConstants::FuzzerPassObfuscateConstants(
     opt::IRContext* ir_context, TransformationContext* transformation_context,
     FuzzerContext* fuzzer_context,
-    protobufs::TransformationSequence* transformations,
-    bool ignore_inapplicable_transformations)
+    protobufs::TransformationSequence* transformations)
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
-                 transformations, ignore_inapplicable_transformations) {}
+                 transformations) {}
 
 void FuzzerPassObfuscateConstants::ObfuscateBoolConstantViaConstantPair(
     uint32_t depth, const protobufs::IdUseDescriptor& bool_constant_use,
