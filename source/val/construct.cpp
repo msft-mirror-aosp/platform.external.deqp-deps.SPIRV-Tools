@@ -181,9 +181,8 @@ bool Construct::IsStructuredExit(ValidationState_t& _, BasicBlock* dest) const {
       for (auto& use : block->label()->uses()) {
         if ((use.first->opcode() == SpvOpLoopMerge ||
              use.first->opcode() == SpvOpSelectionMerge) &&
-            use.second == 1 && use.first->block()->dominates(*block)) {
+            use.second == 1)
           return use.first->block();
-        }
       }
       return block->immediate_dominator();
     };
