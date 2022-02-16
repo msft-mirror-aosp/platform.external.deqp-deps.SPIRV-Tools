@@ -33,8 +33,7 @@ class FuzzerPass {
   FuzzerPass(opt::IRContext* ir_context,
              TransformationContext* transformation_context,
              FuzzerContext* fuzzer_context,
-             protobufs::TransformationSequence* transformations,
-             bool ignore_inapplicable_transformations);
+             protobufs::TransformationSequence* transformations);
 
   virtual ~FuzzerPass();
 
@@ -322,10 +321,6 @@ class FuzzerPass {
   TransformationContext* transformation_context_;
   FuzzerContext* fuzzer_context_;
   protobufs::TransformationSequence* transformations_;
-  // If set, then transformations that should be applicable by construction are
-  // still tested for applicability, and ignored if they turn out to be
-  // inapplicable. Otherwise, applicability by construction is asserted.
-  const bool ignore_inapplicable_transformations_;
 };
 
 }  // namespace fuzz
