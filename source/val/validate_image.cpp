@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2017 Google Inc.
+// Copyright (c) 2017 Google Inc.
 // Modifications Copyright (C) 2020 Advanced Micro Devices, Inc. All rights
 // reserved.
 //
@@ -20,7 +20,6 @@
 
 #include "source/diagnostic.h"
 #include "source/opcode.h"
-#include "source/spirv_constant.h"
 #include "source/spirv_target_env.h"
 #include "source/util/bitutils.h"
 #include "source/val/instruction.h"
@@ -67,12 +66,6 @@ bool CheckAllImageOperandsHandled() {
     case SpvImageOperandsVolatileTexelKHRMask:
     case SpvImageOperandsSignExtendMask:
     case SpvImageOperandsZeroExtendMask:
-    // TODO(jaebaek): Move this line properly after handling image offsets
-    //                operand. This line temporarily fixes CI failure that
-    //                blocks other PRs.
-    // https://github.com/KhronosGroup/SPIRV-Tools/issues/4565
-    case SpvImageOperandsOffsetsMask:
-    case SpvImageOperandsNontemporalMask:
       return true;
   }
   return false;
@@ -260,8 +253,7 @@ spv_result_t ValidateImageOperands(ValidationState_t& _,
         mask & ~uint32_t(SpvImageOperandsNonPrivateTexelKHRMask |
                          SpvImageOperandsVolatileTexelKHRMask |
                          SpvImageOperandsSignExtendMask |
-                         SpvImageOperandsZeroExtendMask |
-                         SpvImageOperandsNontemporalMask);
+                         SpvImageOperandsZeroExtendMask);
     size_t expected_num_image_operand_words =
         spvtools::utils::CountSetBits(mask_bits_having_operands);
     if (mask & SpvImageOperandsGradMask) {
@@ -289,14 +281,13 @@ spv_result_t ValidateImageOperands(ValidationState_t& _,
   // the module to be invalid.
   if (mask == 0) return SPV_SUCCESS;
 
-  if (spvtools::utils::CountSetBits(mask & (SpvImageOperandsOffsetMask |
-                                            SpvImageOperandsConstOffsetMask |
-                                            SpvImageOperandsConstOffsetsMask |
-                                            SpvImageOperandsOffsetsMask)) > 1) {
+  if (spvtools::utils::CountSetBits(
+          mask & (SpvImageOperandsOffsetMask | SpvImageOperandsConstOffsetMask |
+                  SpvImageOperandsConstOffsetsMask)) > 1) {
     return _.diag(SPV_ERROR_INVALID_DATA, inst)
            << _.VkErrorID(4662)
-           << "Image Operands Offset, ConstOffset, ConstOffsets, Offsets "
-              "cannot be used together";
+           << "Image Operands Offset, ConstOffset, ConstOffsets cannot be used "
+           << "together";
   }
 
   const bool is_implicit_lod = IsImplicitLod(opcode);
@@ -503,7 +494,7 @@ spv_result_t ValidateImageOperands(ValidationState_t& _,
     if (!_.IsIntVectorType(component_type) ||
         _.GetDimension(component_type) != 2) {
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
-             << "Expected Image Operand ConstOffsets array components to be "
+             << "Expected Image Operand ConstOffsets array componenets to be "
                 "int vectors of size 2";
     }
 
@@ -627,14 +618,6 @@ spv_result_t ValidateImageOperands(ValidationState_t& _,
     // void, and the Format is Unknown.
     // In Vulkan, the texel type is only known in all cases by the pipeline
     // setup.
-  }
-
-  if (mask & SpvImageOperandsOffsetsMask) {
-    // TODO: add validation
-  }
-
-  if (mask & SpvImageOperandsNontemporalMask) {
-    // Checked elsewhere: SPIR-V 1.6 version or later.
   }
 
   return SPV_SUCCESS;
@@ -922,13 +905,6 @@ spv_result_t ValidateTypeSampledImage(ValidationState_t& _,
               "operand set to 0 or 1";
   }
 
-  // This covers both OpTypeSampledImage and OpSampledImage.
-  if (_.version() >= SPV_SPIRV_VERSION_WORD(1, 6) && info.dim == SpvDimBuffer) {
-    return _.diag(SPV_ERROR_INVALID_ID, inst)
-           << "In SPIR-V 1.6 or later, sampled image dimension must not be "
-              "Buffer";
-  }
-
   return SPV_SUCCESS;
 }
 
@@ -1044,7 +1020,7 @@ spv_result_t ValidateSampledImage(ValidationState_t& _,
                << "Result <id> from OpSampledImage instruction must not appear "
                   "as operand for Op"
                << spvOpcodeString(static_cast<SpvOp>(consumer_opcode))
-               << ", since it is not specified as taking an "
+               << ", since it is not specificed as taking an "
                << "OpTypeSampledImage."
                << " Found result <id> '" << _.getIdName(inst->id())
                << "' as an operand of <id> '"
@@ -1673,7 +1649,7 @@ spv_result_t ValidateImageWrite(ValidationState_t& _, const Instruction* inst) {
            << " components, but given only " << actual_coord_size;
   }
 
-  // TODO(atgoo@github.com) The spec doesn't explicitly say what the type
+  // TODO(atgoo@github.com) The spec doesn't explicitely say what the type
   // of texel should be.
   const uint32_t texel_type = _.GetOperandTypeId(inst, 2);
   if (!_.IsIntScalarOrVectorType(texel_type) &&
@@ -2082,13 +2058,11 @@ spv_result_t ImagePass(ValidationState_t& _, const Instruction* inst) {
                                       std::string* message) {
           const auto* models = state.GetExecutionModels(entry_point->id());
           const auto* modes = state.GetExecutionModes(entry_point->id());
-          if (models &&
-              models->find(SpvExecutionModelGLCompute) != models->end() &&
-              (!modes ||
-               (modes->find(SpvExecutionModeDerivativeGroupLinearNV) ==
-                    modes->end() &&
-                modes->find(SpvExecutionModeDerivativeGroupQuadsNV) ==
-                    modes->end()))) {
+          if (models->find(SpvExecutionModelGLCompute) != models->end() &&
+              modes->find(SpvExecutionModeDerivativeGroupLinearNV) ==
+                  modes->end() &&
+              modes->find(SpvExecutionModeDerivativeGroupQuadsNV) ==
+                  modes->end()) {
             if (message) {
               *message =
                   std::string(
