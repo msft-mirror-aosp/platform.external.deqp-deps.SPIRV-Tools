@@ -15,7 +15,6 @@
 #include "source/fuzz/transformation_add_global_undef.h"
 
 #include "source/fuzz/fuzzer_util.h"
-#include "source/opt/reflect.h"
 
 namespace spvtools {
 namespace fuzz {
@@ -36,11 +35,9 @@ bool TransformationAddGlobalUndef::IsApplicable(
   if (!fuzzerutil::IsFreshId(ir_context, message_.fresh_id())) {
     return false;
   }
-  auto type = ir_context->get_def_use_mgr()->GetDef(message_.type_id());
-  // The type must exist, and must not be a function or pointer type.
-  return type != nullptr && opt::IsTypeInst(type->opcode()) &&
-         type->opcode() != SpvOpTypeFunction &&
-         type->opcode() != SpvOpTypePointer;
+  auto type = ir_context->get_type_mgr()->GetType(message_.type_id());
+  // The type must exist, and must not be a function type.
+  return type && !type->AsFunction();
 }
 
 void TransformationAddGlobalUndef::Apply(
