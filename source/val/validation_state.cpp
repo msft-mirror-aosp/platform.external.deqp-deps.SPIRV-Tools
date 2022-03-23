@@ -175,19 +175,6 @@ ValidationState_t::ValidationState_t(const spv_const_context ctx,
     }
   }
 
-  // LocalSizeId is only disallowed prior to Vulkan 1.3 without maintenance4.
-  switch (env) {
-    case SPV_ENV_VULKAN_1_0:
-    case SPV_ENV_VULKAN_1_1:
-    case SPV_ENV_VULKAN_1_1_SPIRV_1_4:
-    case SPV_ENV_VULKAN_1_2:
-      features_.env_allow_localsizeid = false;
-      break;
-    default:
-      features_.env_allow_localsizeid = true;
-      break;
-  }
-
   // Only attempt to count if we have words, otherwise let the other validation
   // fail and generate an error.
   if (num_words > 0) {
@@ -399,15 +386,6 @@ void ValidationState_t::RegisterCapability(SpvCapability cap) {
       features_.variable_pointers_storage_buffer = true;
       break;
     default:
-      // TODO(dneto): For now don't validate SPV_NV_ray_tracing, which uses
-      // capability SpvCapabilityRayTracingNV.
-      // SpvCapabilityRayTracingProvisionalKHR would need the same treatment.
-      // One of the differences going from SPV_KHR_ray_tracing from
-      // provisional to final spec was the provisional spec uses Locations
-      // for variables in certain storage classes, just like the
-      // SPV_NV_ray_tracing extension.  So it mimics the NVIDIA extension.
-      // The final SPV_KHR_ray_tracing uses a different capability token
-      // number, so it doesn't fall into this case.
       break;
   }
 }
@@ -498,7 +476,7 @@ spv_result_t ValidationState_t::RegisterFunctionEnd() {
          "inside of another function");
   assert(in_block() == false &&
          "RegisterFunctionParameter can only be called when parsing the binary "
-         "outside of a block");
+         "ouside of a block");
   current_function().RegisterFunctionEnd();
   in_function_ = false;
   return SPV_SUCCESS;
@@ -516,13 +494,15 @@ void ValidationState_t::RegisterDebugInstruction(const Instruction* inst) {
   switch (inst->opcode()) {
     case SpvOpName: {
       const auto target = inst->GetOperandAs<uint32_t>(0);
-      const std::string str = inst->GetOperandAs<std::string>(1);
+      const auto* str = reinterpret_cast<const char*>(inst->words().data() +
+                                                      inst->operand(1).offset);
       AssignNameToId(target, str);
       break;
     }
     case SpvOpMemberName: {
       const auto target = inst->GetOperandAs<uint32_t>(0);
-      const std::string str = inst->GetOperandAs<std::string>(2);
+      const auto* str = reinterpret_cast<const char*>(inst->words().data() +
+                                                      inst->operand(2).offset);
       AssignNameToId(target, str);
       break;
     }
@@ -610,7 +590,7 @@ void ValidationState_t::RegisterStorageClassConsumer(
               if (message) {
                 *message =
                     errorVUID +
-                    "in Vulkan environment, Output Storage Class must not be "
+                    "in Vulkan evironment, Output Storage Class must not be "
                     "used in GLCompute, RayGenerationKHR, IntersectionKHR, "
                     "AnyHitKHR, ClosestHitKHR, MissKHR, or CallableKHR "
                     "execution models";
@@ -632,7 +612,7 @@ void ValidationState_t::RegisterStorageClassConsumer(
               if (message) {
                 *message =
                     errorVUID +
-                    "in Vulkan environment, Workgroup Storage Class is limited "
+                    "in Vulkan evironment, Workgroup Storage Class is limited "
                     "to MeshNV, TaskNV, and GLCompute execution model";
               }
               return false;
@@ -749,19 +729,19 @@ uint32_t ValidationState_t::GetBitWidth(uint32_t id) const {
 
 bool ValidationState_t::IsVoidType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeVoid;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeVoid;
 }
 
 bool ValidationState_t::IsFloatScalarType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeFloat;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeFloat;
 }
 
 bool ValidationState_t::IsFloatVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeVector) {
     return IsFloatScalarType(GetComponentType(id));
@@ -772,9 +752,7 @@ bool ValidationState_t::IsFloatVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsFloatScalarOrVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeFloat) {
     return true;
@@ -789,14 +767,13 @@ bool ValidationState_t::IsFloatScalarOrVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsIntScalarType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeInt;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeInt;
 }
 
 bool ValidationState_t::IsIntVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeVector) {
     return IsIntScalarType(GetComponentType(id));
@@ -807,9 +784,7 @@ bool ValidationState_t::IsIntVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsIntScalarOrVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeInt) {
     return true;
@@ -824,14 +799,13 @@ bool ValidationState_t::IsIntScalarOrVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsUnsignedIntScalarType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeInt && inst->word(3) == 0;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeInt && inst->word(3) == 0;
 }
 
 bool ValidationState_t::IsUnsignedIntVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeVector) {
     return IsUnsignedIntScalarType(GetComponentType(id));
@@ -842,14 +816,13 @@ bool ValidationState_t::IsUnsignedIntVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsSignedIntScalarType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeInt && inst->word(3) == 1;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeInt && inst->word(3) == 1;
 }
 
 bool ValidationState_t::IsSignedIntVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeVector) {
     return IsSignedIntScalarType(GetComponentType(id));
@@ -860,14 +833,13 @@ bool ValidationState_t::IsSignedIntVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsBoolScalarType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeBool;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeBool;
 }
 
 bool ValidationState_t::IsBoolVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeVector) {
     return IsBoolScalarType(GetComponentType(id));
@@ -878,9 +850,7 @@ bool ValidationState_t::IsBoolVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsBoolScalarOrVectorType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeBool) {
     return true;
@@ -895,9 +865,7 @@ bool ValidationState_t::IsBoolScalarOrVectorType(uint32_t id) const {
 
 bool ValidationState_t::IsFloatMatrixType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  if (!inst) {
-    return false;
-  }
+  assert(inst);
 
   if (inst->opcode() == SpvOpTypeMatrix) {
     return IsFloatScalarType(GetComponentType(id));
@@ -952,7 +920,8 @@ bool ValidationState_t::GetStructMemberTypes(
 
 bool ValidationState_t::IsPointerType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypePointer;
+  assert(inst);
+  return inst->opcode() == SpvOpTypePointer;
 }
 
 bool ValidationState_t::GetPointerTypeInfo(uint32_t id, uint32_t* data_type,
@@ -970,7 +939,8 @@ bool ValidationState_t::GetPointerTypeInfo(uint32_t id, uint32_t* data_type,
 
 bool ValidationState_t::IsCooperativeMatrixType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
-  return inst && inst->opcode() == SpvOpTypeCooperativeMatrixNV;
+  assert(inst);
+  return inst->opcode() == SpvOpTypeCooperativeMatrixNV;
 }
 
 bool ValidationState_t::IsFloatCooperativeMatrixType(uint32_t id) const {
@@ -1292,13 +1262,16 @@ const Instruction* ValidationState_t::TracePointer(
   return base_ptr;
 }
 
-bool ValidationState_t::ContainsType(
-    uint32_t id, const std::function<bool(const Instruction*)>& f,
-    bool traverse_all_types) const {
+bool ValidationState_t::ContainsSizedIntOrFloatType(uint32_t id, SpvOp type,
+                                                    uint32_t width) const {
+  if (type != SpvOpTypeInt && type != SpvOpTypeFloat) return false;
+
   const auto inst = FindDef(id);
   if (!inst) return false;
 
-  if (f(inst)) return true;
+  if (inst->opcode() == type) {
+    return inst->GetOperandAs<uint32_t>(1u) == width;
+  }
 
   switch (inst->opcode()) {
     case SpvOpTypeArray:
@@ -1308,45 +1281,24 @@ bool ValidationState_t::ContainsType(
     case SpvOpTypeImage:
     case SpvOpTypeSampledImage:
     case SpvOpTypeCooperativeMatrixNV:
-      return ContainsType(inst->GetOperandAs<uint32_t>(1u), f,
-                          traverse_all_types);
+      return ContainsSizedIntOrFloatType(inst->GetOperandAs<uint32_t>(1u), type,
+                                         width);
     case SpvOpTypePointer:
       if (IsForwardPointer(id)) return false;
-      if (traverse_all_types) {
-        return ContainsType(inst->GetOperandAs<uint32_t>(2u), f,
-                            traverse_all_types);
-      }
-      break;
+      return ContainsSizedIntOrFloatType(inst->GetOperandAs<uint32_t>(2u), type,
+                                         width);
     case SpvOpTypeFunction:
-    case SpvOpTypeStruct:
-      if (inst->opcode() == SpvOpTypeFunction && !traverse_all_types) {
-        return false;
-      }
+    case SpvOpTypeStruct: {
       for (uint32_t i = 1; i < inst->operands().size(); ++i) {
-        if (ContainsType(inst->GetOperandAs<uint32_t>(i), f,
-                         traverse_all_types)) {
+        if (ContainsSizedIntOrFloatType(inst->GetOperandAs<uint32_t>(i), type,
+                                        width))
           return true;
-        }
       }
-      break;
-    default:
-      break;
-  }
-
-  return false;
-}
-
-bool ValidationState_t::ContainsSizedIntOrFloatType(uint32_t id, SpvOp type,
-                                                    uint32_t width) const {
-  if (type != SpvOpTypeInt && type != SpvOpTypeFloat) return false;
-
-  const auto f = [type, width](const Instruction* inst) {
-    if (inst->opcode() == type) {
-      return inst->GetOperandAs<uint32_t>(1u) == width;
+      return false;
     }
-    return false;
-  };
-  return ContainsType(id, f);
+    default:
+      return false;
+  }
 }
 
 bool ValidationState_t::ContainsLimitedUseIntOrFloatType(uint32_t id) const {
@@ -1359,13 +1311,6 @@ bool ValidationState_t::ContainsLimitedUseIntOrFloatType(uint32_t id) const {
     return true;
   }
   return false;
-}
-
-bool ValidationState_t::ContainsRuntimeArray(uint32_t id) const {
-  const auto f = [](const Instruction* inst) {
-    return inst->opcode() == SpvOpTypeRuntimeArray;
-  };
-  return ContainsType(id, f, /* traverse_all_types = */ false);
 }
 
 bool ValidationState_t::IsValidStorageClass(
@@ -1407,7 +1352,7 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
     return "";
   }
 
-  // This large switch case is only searched when an error has occurred.
+  // This large switch case is only searched when an error has occured.
   // If an id is changed, the old case must be modified or removed. Each string
   // here is interpreted as being "implemented"
 
@@ -1856,16 +1801,14 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-None-04667);
     case 4669:
       return VUID_WRAP(VUID-StandaloneSpirv-GLSLShared-04669);
-    case 4670:
-      return VUID_WRAP(VUID-StandaloneSpirv-Flat-04670);
     case 4675:
       return VUID_WRAP(VUID-StandaloneSpirv-FPRoundingMode-04675);
     case 4677:
       return VUID_WRAP(VUID-StandaloneSpirv-Invariant-04677);
     case 4682:
       return VUID_WRAP(VUID-StandaloneSpirv-OpControlBarrier-04682);
-    case 6426:
-      return VUID_WRAP(VUID-StandaloneSpirv-LocalSize-06426); // formally 04683
+    case 4683:
+      return VUID_WRAP(VUID-StandaloneSpirv-LocalSize-04683);
     case 4685:
       return VUID_WRAP(VUID-StandaloneSpirv-OpGroupNonUniformBallotBitCount-04685);
     case 4686:
@@ -1884,16 +1827,6 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-OpMemoryBarrier-04733);
     case 4780:
       return VUID_WRAP(VUID-StandaloneSpirv-Result-04780);
-    case 4915:
-      return VUID_WRAP(VUID-StandaloneSpirv-Location-04915);
-    case 4916:
-      return VUID_WRAP(VUID-StandaloneSpirv-Location-04916);
-    case 4917:
-      return VUID_WRAP(VUID-StandaloneSpirv-Location-04917);
-    case 4918:
-      return VUID_WRAP(VUID-StandaloneSpirv-Location-04918);
-    case 4919:
-      return VUID_WRAP(VUID-StandaloneSpirv-Location-04919);
     default:
       return "";  // unknown id
   }
