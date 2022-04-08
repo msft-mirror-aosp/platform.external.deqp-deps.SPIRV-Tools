@@ -22,8 +22,8 @@ namespace spvtools {
 namespace fuzz {
 
 TransformationFunctionCall::TransformationFunctionCall(
-    protobufs::TransformationFunctionCall message)
-    : message_(std::move(message)) {}
+    const spvtools::fuzz::protobufs::TransformationFunctionCall& message)
+    : message_(message) {}
 
 TransformationFunctionCall::TransformationFunctionCall(
     uint32_t fresh_id, uint32_t callee_id,
@@ -183,10 +183,6 @@ protobufs::Transformation TransformationFunctionCall::ToMessage() const {
   protobufs::Transformation result;
   *result.mutable_function_call() = message_;
   return result;
-}
-
-std::unordered_set<uint32_t> TransformationFunctionCall::GetFreshIds() const {
-  return {message_.fresh_id()};
 }
 
 }  // namespace fuzz

@@ -27,6 +27,8 @@ FuzzerPassAddAccessChains::FuzzerPassAddAccessChains(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassAddAccessChains::~FuzzerPassAddAccessChains() = default;
+
 void FuzzerPassAddAccessChains::Apply() {
   ForEachInstructionWithInstructionDescriptor(
       [this](opt::Function* function, opt::BasicBlock* block,
@@ -90,11 +92,6 @@ void FuzzerPassAddAccessChains::Apply() {
             relevant_pointer_instructions[GetFuzzerContext()->RandomIndex(
                 relevant_pointer_instructions)];
         std::vector<uint32_t> index_ids;
-
-        // Each index accessing a non-struct composite will be clamped, thus
-        // needing a pair of fresh ids
-        std::vector<std::pair<uint32_t, uint32_t>> fresh_ids_for_clamping;
-
         auto pointer_type = GetIRContext()->get_def_use_mgr()->GetDef(
             chosen_pointer->type_id());
         uint32_t subobject_type_id = pointer_type->GetSingleWordInOperand(1);
@@ -135,37 +132,20 @@ void FuzzerPassAddAccessChains::Apply() {
             break;
           }
 
+          // TODO(https://github.com/KhronosGroup/SPIRV-Tools/issues/3179) We
+          //  could allow non-constant indices when looking up non-structs,
+          //  using clamping to ensure they are in-bounds.
           uint32_t index_value =
               GetFuzzerContext()->GetRandomIndexForAccessChain(bound);
-
+          index_ids.push_back(FindOrCreate32BitIntegerConstant(
+              index_value, GetFuzzerContext()->ChooseEven()));
           switch (subobject_type->opcode()) {
             case SpvOpTypeArray:
             case SpvOpTypeMatrix:
-            case SpvOpTypeVector: {
-              // The index will be clamped
-
-              bool is_signed = GetFuzzerContext()->ChooseEven();
-
-              // Make the constant ready for clamping. We need:
-              // - an OpTypeBool to be present in the module
-              // - an OpConstant with the same type as the index and value
-              //   the maximum value for an index
-              // - a new pair of fresh ids for the clamping instructions
-              FindOrCreateBoolType();
-              FindOrCreateIntegerConstant({bound - 1}, 32, is_signed, false);
-              std::pair<uint32_t, uint32_t> fresh_pair_of_ids = {
-                  GetFuzzerContext()->GetFreshId(),
-                  GetFuzzerContext()->GetFreshId()};
-              fresh_ids_for_clamping.emplace_back(fresh_pair_of_ids);
-
-              index_ids.push_back(FindOrCreateIntegerConstant(
-                  {index_value}, 32, is_signed, false));
+            case SpvOpTypeVector:
               subobject_type_id = subobject_type->GetSingleWordInOperand(0);
-
-            } break;
+              break;
             case SpvOpTypeStruct:
-              index_ids.push_back(FindOrCreateIntegerConstant(
-                  {index_value}, 32, GetFuzzerContext()->ChooseEven(), false));
               subobject_type_id =
                   subobject_type->GetSingleWordInOperand(index_value);
               break;
@@ -182,7 +162,7 @@ void FuzzerPassAddAccessChains::Apply() {
         // Apply the transformation to add an access chain.
         ApplyTransformation(TransformationAccessChain(
             GetFuzzerContext()->GetFreshId(), chosen_pointer->result_id(),
-            index_ids, instruction_descriptor, fresh_ids_for_clamping));
+            index_ids, instruction_descriptor));
       });
 }
 

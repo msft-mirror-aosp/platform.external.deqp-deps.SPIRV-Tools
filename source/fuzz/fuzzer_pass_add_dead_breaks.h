@@ -28,6 +28,8 @@ class FuzzerPassAddDeadBreaks : public FuzzerPass {
                           FuzzerContext* fuzzer_context,
                           protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAddDeadBreaks();
+
   void Apply() override;
 };
 

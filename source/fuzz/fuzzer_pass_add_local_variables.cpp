@@ -28,6 +28,8 @@ FuzzerPassAddLocalVariables::FuzzerPassAddLocalVariables(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassAddLocalVariables::~FuzzerPassAddLocalVariables() = default;
+
 void FuzzerPassAddLocalVariables::Apply() {
   auto basic_type_ids_and_pointers =
       GetAvailableBasicTypesAndPointers(SpvStorageClassFunction);
@@ -69,7 +71,7 @@ void FuzzerPassAddLocalVariables::Apply() {
       }
       ApplyTransformation(TransformationAddLocalVariable(
           GetFuzzerContext()->GetFreshId(), pointer_type, function.result_id(),
-          FindOrCreateZeroConstant(basic_type, false), true));
+          FindOrCreateZeroConstant(basic_type), true));
     }
   }
 }

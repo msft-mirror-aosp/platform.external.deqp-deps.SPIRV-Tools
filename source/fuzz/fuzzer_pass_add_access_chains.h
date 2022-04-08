@@ -30,6 +30,8 @@ class FuzzerPassAddAccessChains : public FuzzerPass {
                             FuzzerContext* fuzzer_context,
                             protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAddAccessChains();
+
   void Apply() override;
 };
 

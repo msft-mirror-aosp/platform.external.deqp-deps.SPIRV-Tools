@@ -18,8 +18,8 @@ namespace spvtools {
 namespace fuzz {
 
 TransformationSetSelectionControl::TransformationSetSelectionControl(
-    protobufs::TransformationSetSelectionControl message)
-    : message_(std::move(message)) {}
+    const spvtools::fuzz::protobufs::TransformationSetSelectionControl& message)
+    : message_(message) {}
 
 TransformationSetSelectionControl::TransformationSetSelectionControl(
     uint32_t block_id, uint32_t selection_control) {
@@ -54,11 +54,6 @@ protobufs::Transformation TransformationSetSelectionControl::ToMessage() const {
   protobufs::Transformation result;
   *result.mutable_set_selection_control() = message_;
   return result;
-}
-
-std::unordered_set<uint32_t> TransformationSetSelectionControl::GetFreshIds()
-    const {
-  return std::unordered_set<uint32_t>();
 }
 
 }  // namespace fuzz

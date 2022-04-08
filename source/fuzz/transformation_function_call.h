@@ -26,7 +26,7 @@ namespace fuzz {
 class TransformationFunctionCall : public Transformation {
  public:
   explicit TransformationFunctionCall(
-      protobufs::TransformationFunctionCall message);
+      const protobufs::TransformationFunctionCall& message);
 
   TransformationFunctionCall(
       uint32_t fresh_id, uint32_t callee_id,
@@ -54,8 +54,6 @@ class TransformationFunctionCall : public Transformation {
   // |callee_id|.
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
-
-  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 

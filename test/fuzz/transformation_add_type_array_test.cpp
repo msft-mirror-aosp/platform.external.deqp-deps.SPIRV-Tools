@@ -13,9 +13,6 @@
 // limitations under the License.
 
 #include "source/fuzz/transformation_add_type_array.h"
-
-#include "gtest/gtest.h"
-#include "source/fuzz/fuzzer_util.h"
 #include "test/fuzz/fuzz_test_util.h"
 
 namespace spvtools {
@@ -54,11 +51,13 @@ TEST(TransformationAddTypeArrayTest, BasicTest) {
   const auto env = SPV_ENV_UNIVERSAL_1_4;
   const auto consumer = nullptr;
   const auto context = BuildModule(env, consumer, shader, kFuzzAssembleOption);
+  ASSERT_TRUE(IsValid(env, context.get()));
+
+  FactManager fact_manager;
   spvtools::ValidatorOptions validator_options;
-  ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(context.get(), validator_options,
-                                               kConsoleMessageConsumer));
-  TransformationContext transformation_context(
-      MakeUnique<FactManager>(context.get()), validator_options);
+  TransformationContext transformation_context(&fact_manager,
+                                               validator_options);
+
   // Id already in use
   ASSERT_FALSE(TransformationAddTypeArray(4, 10, 16).IsApplicable(
       context.get(), transformation_context));
@@ -90,36 +89,19 @@ TEST(TransformationAddTypeArrayTest, BasicTest) {
   ASSERT_FALSE(TransformationAddTypeArray(100, 11, 17)
                    .IsApplicable(context.get(), transformation_context));
 
-  {
-    // %100 = OpTypeArray %10 %16
-    TransformationAddTypeArray transformation(100, 10, 16);
-    ASSERT_EQ(nullptr, context->get_def_use_mgr()->GetDef(100));
-    ASSERT_EQ(nullptr, context->get_type_mgr()->GetType(100));
+  TransformationAddTypeArray transformations[] = {
+      // %100 = OpTypeArray %10 %16
+      TransformationAddTypeArray(100, 10, 16),
+
+      // %101 = OpTypeArray %7 %12
+      TransformationAddTypeArray(101, 7, 12)};
+
+  for (auto& transformation : transformations) {
     ASSERT_TRUE(
         transformation.IsApplicable(context.get(), transformation_context));
-    ApplyAndCheckFreshIds(transformation, context.get(),
-                          &transformation_context);
-    ASSERT_EQ(SpvOpTypeArray,
-              context->get_def_use_mgr()->GetDef(100)->opcode());
-    ASSERT_NE(nullptr, context->get_type_mgr()->GetType(100)->AsArray());
+    transformation.Apply(context.get(), &transformation_context);
   }
-
-  {
-    // %101 = OpTypeArray %7 %12
-    TransformationAddTypeArray transformation(101, 7, 12);
-    ASSERT_EQ(nullptr, context->get_def_use_mgr()->GetDef(101));
-    ASSERT_EQ(nullptr, context->get_type_mgr()->GetType(101));
-    ASSERT_TRUE(
-        transformation.IsApplicable(context.get(), transformation_context));
-    ApplyAndCheckFreshIds(transformation, context.get(),
-                          &transformation_context);
-    ASSERT_EQ(SpvOpTypeArray,
-              context->get_def_use_mgr()->GetDef(100)->opcode());
-    ASSERT_NE(nullptr, context->get_type_mgr()->GetType(100)->AsArray());
-  }
-
-  ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(context.get(), validator_options,
-                                               kConsoleMessageConsumer));
+  ASSERT_TRUE(IsValid(env, context.get()));
 
   std::string after_transformation = R"(
                OpCapability Shader

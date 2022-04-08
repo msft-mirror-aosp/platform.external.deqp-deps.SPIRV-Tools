@@ -28,6 +28,8 @@ class FuzzerPassAddLoads : public FuzzerPass {
                      FuzzerContext* fuzzer_context,
                      protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAddLoads();
+
   void Apply() override;
 };
 

@@ -92,7 +92,7 @@ std::ostream& operator<<(std::ostream& os, const ParsedInstruction& inst) {
   return os;
 }
 
-// Basic check for the equality operator on ParsedInstruction.
+// Sanity check for the equality operator on ParsedInstruction.
 TEST(ParsedInstruction, ZeroInitializedAreEqual) {
   spv_parsed_instruction_t pi = {};
   ParsedInstruction a(pi);
@@ -198,7 +198,7 @@ ParsedInstruction MakeParsedInt32TypeInstruction(uint32_t result_id) {
 
 class BinaryParseTest : public spvtest::TextToBinaryTestBase<::testing::Test> {
  protected:
-  ~BinaryParseTest() override { spvDiagnosticDestroy(diagnostic_); }
+  ~BinaryParseTest() { spvDiagnosticDestroy(diagnostic_); }
 
   void Parse(const SpirvVector& words, spv_result_t expected_result,
              bool flip_words = false) {

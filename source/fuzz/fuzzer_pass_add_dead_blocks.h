@@ -29,6 +29,8 @@ class FuzzerPassAddDeadBlocks : public FuzzerPass {
                           FuzzerContext* fuzzer_context,
                           protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAddDeadBlocks();
+
   void Apply() override;
 };
 

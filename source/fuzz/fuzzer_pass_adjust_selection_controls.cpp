@@ -26,6 +26,9 @@ FuzzerPassAdjustSelectionControls::FuzzerPassAdjustSelectionControls(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassAdjustSelectionControls::~FuzzerPassAdjustSelectionControls() =
+    default;
+
 void FuzzerPassAdjustSelectionControls::Apply() {
   // Consider every merge instruction in the module (via looking through all
   // functions and blocks).

@@ -62,9 +62,7 @@ struct Optimizer::Impl {
   opt::PassManager pass_manager;  // Internal implementation pass manager.
 };
 
-Optimizer::Optimizer(spv_target_env env) : impl_(new Impl(env)) {
-  assert(env != SPV_ENV_WEBGPU_0);
-}
+Optimizer::Optimizer(spv_target_env env) : impl_(new Impl(env)) {}
 
 Optimizer::~Optimizer() {}
 
@@ -155,8 +153,7 @@ Optimizer& Optimizer::RegisterLegalizationPasses() {
           .RegisterPass(CreateVectorDCEPass())
           .RegisterPass(CreateDeadInsertElimPass())
           .RegisterPass(CreateReduceLoadSizePass())
-          .RegisterPass(CreateAggressiveDCEPass())
-          .RegisterPass(CreateInterpolateFixupPass());
+          .RegisterPass(CreateAggressiveDCEPass());
 }
 
 Optimizer& Optimizer::RegisterPerformancePasses() {
@@ -164,7 +161,6 @@ Optimizer& Optimizer::RegisterPerformancePasses() {
       .RegisterPass(CreateDeadBranchElimPass())
       .RegisterPass(CreateMergeReturnPass())
       .RegisterPass(CreateInlineExhaustivePass())
-      .RegisterPass(CreateEliminateDeadFunctionsPass())
       .RegisterPass(CreateAggressiveDCEPass())
       .RegisterPass(CreatePrivateToLocalPass())
       .RegisterPass(CreateLocalSingleBlockLoadStoreElimPass())
@@ -179,18 +175,9 @@ Optimizer& Optimizer::RegisterPerformancePasses() {
       .RegisterPass(CreateAggressiveDCEPass())
       .RegisterPass(CreateCCPPass())
       .RegisterPass(CreateAggressiveDCEPass())
-      .RegisterPass(CreateLoopUnrollPass(true))
-      .RegisterPass(CreateDeadBranchElimPass())
       .RegisterPass(CreateRedundancyEliminationPass())
       .RegisterPass(CreateCombineAccessChainsPass())
       .RegisterPass(CreateSimplificationPass())
-      .RegisterPass(CreateScalarReplacementPass())
-      .RegisterPass(CreateLocalAccessChainConvertPass())
-      .RegisterPass(CreateLocalSingleBlockLoadStoreElimPass())
-      .RegisterPass(CreateLocalSingleStoreElimPass())
-      .RegisterPass(CreateAggressiveDCEPass())
-      .RegisterPass(CreateSSARewritePass())
-      .RegisterPass(CreateAggressiveDCEPass())
       .RegisterPass(CreateVectorDCEPass())
       .RegisterPass(CreateDeadInsertElimPass())
       .RegisterPass(CreateDeadBranchElimPass())
@@ -242,6 +229,23 @@ Optimizer& Optimizer::RegisterSizePasses() {
       .RegisterPass(CreateCFGCleanupPass());
 }
 
+Optimizer& Optimizer::RegisterVulkanToWebGPUPasses() {
+  return RegisterPass(CreateStripAtomicCounterMemoryPass())
+      .RegisterPass(CreateGenerateWebGPUInitializersPass())
+      .RegisterPass(CreateLegalizeVectorShufflePass())
+      .RegisterPass(CreateSplitInvalidUnreachablePass())
+      .RegisterPass(CreateEliminateDeadConstantPass())
+      .RegisterPass(CreateFlattenDecorationPass())
+      .RegisterPass(CreateAggressiveDCEPass())
+      .RegisterPass(CreateDeadBranchElimPass())
+      .RegisterPass(CreateCompactIdsPass());
+}
+
+Optimizer& Optimizer::RegisterWebGPUToVulkanPasses() {
+  return RegisterPass(CreateDecomposeInitializedVariablesPass())
+      .RegisterPass(CreateCompactIdsPass());
+}
+
 bool Optimizer::RegisterPassesFromFlags(const std::vector<std::string>& flags) {
   for (const auto& flag : flags) {
     if (!RegisterPassFromFlag(flag)) {
@@ -284,7 +288,9 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
   //
   // Both Pass::name() and Pass::desc() should be static class members so they
   // can be invoked without creating a pass instance.
-  if (pass_name == "strip-debug") {
+  if (pass_name == "strip-atomic-counter-memory") {
+    RegisterPass(CreateStripAtomicCounterMemoryPass());
+  } else if (pass_name == "strip-debug") {
     RegisterPass(CreateStripDebugInfoPass());
   } else if (pass_name == "strip-reflect") {
     RegisterPass(CreateStripReflectInfoPass());
@@ -324,6 +330,10 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
     RegisterPass(CreateDescriptorScalarReplacementPass());
   } else if (pass_name == "eliminate-dead-code-aggressive") {
     RegisterPass(CreateAggressiveDCEPass());
+  } else if (pass_name == "propagate-line-info") {
+    RegisterPass(CreatePropagateLineInfoPass());
+  } else if (pass_name == "eliminate-redundant-line-info") {
+    RegisterPass(CreateRedundantLineInfoElimPass());
   } else if (pass_name == "eliminate-insert-extract") {
     RegisterPass(CreateInsertExtractElimPass());
   } else if (pass_name == "eliminate-local-single-block") {
@@ -397,25 +407,19 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
   } else if (pass_name == "replace-invalid-opcode") {
     RegisterPass(CreateReplaceInvalidOpcodePass());
   } else if (pass_name == "inst-bindless-check") {
-    RegisterPass(CreateInstBindlessCheckPass(7, 23, false, false));
+    RegisterPass(CreateInstBindlessCheckPass(7, 23, false, false, 2));
     RegisterPass(CreateSimplificationPass());
     RegisterPass(CreateDeadBranchElimPass());
     RegisterPass(CreateBlockMergePass());
     RegisterPass(CreateAggressiveDCEPass());
   } else if (pass_name == "inst-desc-idx-check") {
-    RegisterPass(CreateInstBindlessCheckPass(7, 23, true, true));
-    RegisterPass(CreateSimplificationPass());
-    RegisterPass(CreateDeadBranchElimPass());
-    RegisterPass(CreateBlockMergePass());
-    RegisterPass(CreateAggressiveDCEPass());
-  } else if (pass_name == "inst-buff-oob-check") {
-    RegisterPass(CreateInstBindlessCheckPass(7, 23, false, false, true, true));
+    RegisterPass(CreateInstBindlessCheckPass(7, 23, true, true, 2));
     RegisterPass(CreateSimplificationPass());
     RegisterPass(CreateDeadBranchElimPass());
     RegisterPass(CreateBlockMergePass());
     RegisterPass(CreateAggressiveDCEPass());
   } else if (pass_name == "inst-buff-addr-check") {
-    RegisterPass(CreateInstBuffAddrCheckPass(7, 23));
+    RegisterPass(CreateInstBuffAddrCheckPass(7, 23, 2));
     RegisterPass(CreateAggressiveDCEPass());
   } else if (pass_name == "convert-relaxed-to-half") {
     RegisterPass(CreateConvertRelaxedToHalfPass());
@@ -489,14 +493,20 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
     RegisterSizePasses();
   } else if (pass_name == "legalize-hlsl") {
     RegisterLegalizationPasses();
+  } else if (pass_name == "generate-webgpu-initializers") {
+    RegisterPass(CreateGenerateWebGPUInitializersPass());
+  } else if (pass_name == "legalize-vector-shuffle") {
+    RegisterPass(CreateLegalizeVectorShufflePass());
+  } else if (pass_name == "split-invalid-unreachable") {
+    RegisterPass(CreateLegalizeVectorShufflePass());
+  } else if (pass_name == "decompose-initialized-variables") {
+    RegisterPass(CreateDecomposeInitializedVariablesPass());
   } else if (pass_name == "graphics-robust-access") {
     RegisterPass(CreateGraphicsRobustAccessPass());
   } else if (pass_name == "wrap-opkill") {
     RegisterPass(CreateWrapOpKillPass());
   } else if (pass_name == "amd-ext-to-khr") {
     RegisterPass(CreateAmdExtToKhrPass());
-  } else if (pass_name == "interpolate-fixup") {
-    RegisterPass(CreateInterpolateFixupPass());
   } else {
     Errorf(consumer(), nullptr, {},
            "Unknown flag '--%s'. Use --help for a list of valid flags",
@@ -560,13 +570,11 @@ bool Optimizer::Run(const uint32_t* original_binary,
 
 #ifndef NDEBUG
   // We do not keep the result id of DebugScope in struct DebugScope.
-  // Instead, we assign random ids for them, which results in integrity
-  // check failures. In addition, propagating the OpLine/OpNoLine to preserve
-  // the debug information through transformations results in integrity
-  // check failures. We want to skip the integrity check when the module
-  // contains DebugScope or OpLine/OpNoLine instructions.
+  // Instead, we assign random ids for them, which results in sanity
+  // check failures. We want to skip the sanity check when the module
+  // contains DebugScope instructions.
   if (status == opt::Pass::Status::SuccessWithoutChange &&
-      !context->module()->ContainsDebugInfo()) {
+      !context->module()->ContainsDebugScope()) {
     std::vector<uint32_t> optimized_binary_with_nop;
     context->module()->ToBinary(&optimized_binary_with_nop,
                                 /* skip_nop = */ false);
@@ -605,6 +613,11 @@ Optimizer& Optimizer::SetValidateAfterAll(bool validate) {
 
 Optimizer::PassToken CreateNullPass() {
   return MakeUnique<Optimizer::PassToken::Impl>(MakeUnique<opt::NullPass>());
+}
+
+Optimizer::PassToken CreateStripAtomicCounterMemoryPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::StripAtomicCounterMemoryPass>());
 }
 
 Optimizer::PassToken CreateStripDebugInfoPass() {
@@ -730,11 +743,13 @@ Optimizer::PassToken CreateAggressiveDCEPass() {
 }
 
 Optimizer::PassToken CreatePropagateLineInfoPass() {
-  return MakeUnique<Optimizer::PassToken::Impl>(MakeUnique<opt::EmptyPass>());
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::ProcessLinesPass>(opt::kLinesPropagateLines));
 }
 
 Optimizer::PassToken CreateRedundantLineInfoElimPass() {
-  return MakeUnique<Optimizer::PassToken::Impl>(MakeUnique<opt::EmptyPass>());
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::ProcessLinesPass>(opt::kLinesEliminateDeadLines));
 }
 
 Optimizer::PassToken CreateCompactIdsPass() {
@@ -867,14 +882,15 @@ Optimizer::PassToken CreateUpgradeMemoryModelPass() {
       MakeUnique<opt::UpgradeMemoryModel>());
 }
 
-Optimizer::PassToken CreateInstBindlessCheckPass(
-    uint32_t desc_set, uint32_t shader_id, bool desc_length_enable,
-    bool desc_init_enable, bool buff_oob_enable, bool texbuff_oob_enable) {
+Optimizer::PassToken CreateInstBindlessCheckPass(uint32_t desc_set,
+                                                 uint32_t shader_id,
+                                                 bool input_length_enable,
+                                                 bool input_init_enable,
+                                                 uint32_t version) {
   return MakeUnique<Optimizer::PassToken::Impl>(
-      MakeUnique<opt::InstBindlessCheckPass>(
-          desc_set, shader_id, desc_length_enable, desc_init_enable,
-          buff_oob_enable, texbuff_oob_enable,
-          desc_length_enable || desc_init_enable || buff_oob_enable));
+      MakeUnique<opt::InstBindlessCheckPass>(desc_set, shader_id,
+                                             input_length_enable,
+                                             input_init_enable, version));
 }
 
 Optimizer::PassToken CreateInstDebugPrintfPass(uint32_t desc_set,
@@ -884,9 +900,10 @@ Optimizer::PassToken CreateInstDebugPrintfPass(uint32_t desc_set,
 }
 
 Optimizer::PassToken CreateInstBuffAddrCheckPass(uint32_t desc_set,
-                                                 uint32_t shader_id) {
+                                                 uint32_t shader_id,
+                                                 uint32_t version) {
   return MakeUnique<Optimizer::PassToken::Impl>(
-      MakeUnique<opt::InstBuffAddrCheckPass>(desc_set, shader_id));
+      MakeUnique<opt::InstBuffAddrCheckPass>(desc_set, shader_id, version));
 }
 
 Optimizer::PassToken CreateConvertRelaxedToHalfPass() {
@@ -904,9 +921,29 @@ Optimizer::PassToken CreateCodeSinkingPass() {
       MakeUnique<opt::CodeSinkingPass>());
 }
 
+Optimizer::PassToken CreateGenerateWebGPUInitializersPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::GenerateWebGPUInitializersPass>());
+}
+
 Optimizer::PassToken CreateFixStorageClassPass() {
   return MakeUnique<Optimizer::PassToken::Impl>(
       MakeUnique<opt::FixStorageClass>());
+}
+
+Optimizer::PassToken CreateLegalizeVectorShufflePass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::LegalizeVectorShufflePass>());
+}
+
+Optimizer::PassToken CreateDecomposeInitializedVariablesPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::DecomposeInitializedVariablesPass>());
+}
+
+Optimizer::PassToken CreateSplitInvalidUnreachablePass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::SplitInvalidUnreachablePass>());
 }
 
 Optimizer::PassToken CreateGraphicsRobustAccessPass() {
@@ -926,11 +963,6 @@ Optimizer::PassToken CreateWrapOpKillPass() {
 Optimizer::PassToken CreateAmdExtToKhrPass() {
   return MakeUnique<Optimizer::PassToken::Impl>(
       MakeUnique<opt::AmdExtensionToKhrPass>());
-}
-
-Optimizer::PassToken CreateInterpolateFixupPass() {
-  return MakeUnique<Optimizer::PassToken::Impl>(
-      MakeUnique<opt::InterpFixupPass>());
 }
 
 }  // namespace spvtools

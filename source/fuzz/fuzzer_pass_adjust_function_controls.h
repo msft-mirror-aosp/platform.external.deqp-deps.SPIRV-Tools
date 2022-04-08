@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_H_
-#define SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_H_
+#ifndef SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_
+#define SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_
 
 #include "source/fuzz/fuzzer_pass.h"
 
@@ -28,10 +28,12 @@ class FuzzerPassAdjustFunctionControls : public FuzzerPass {
       FuzzerContext* fuzzer_context,
       protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAdjustFunctionControls() override;
+
   void Apply() override;
 };
 
 }  // namespace fuzz
 }  // namespace spvtools
 
-#endif  // SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_H_
+#endif  // SOURCE_FUZZ_FUZZER_PASS_ADJUST_FUNCTION_CONTROLS_

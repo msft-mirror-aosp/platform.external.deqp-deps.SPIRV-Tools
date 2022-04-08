@@ -24,8 +24,8 @@ namespace spvtools {
 namespace fuzz {
 
 TransformationAddDeadBreak::TransformationAddDeadBreak(
-    protobufs::TransformationAddDeadBreak message)
-    : message_(std::move(message)) {}
+    const spvtools::fuzz::protobufs::TransformationAddDeadBreak& message)
+    : message_(message) {}
 
 TransformationAddDeadBreak::TransformationAddDeadBreak(
     uint32_t from_block, uint32_t to_block, bool break_condition_value,
@@ -85,10 +85,12 @@ bool TransformationAddDeadBreak::AddingBreakRespectsStructuredControlFlow(
     // loop as part of the loop, but it is not legal to jump from a loop's
     // continue construct to the loop's merge (except from the back-edge block),
     // so we need to check for this case.
+    //
+    // TODO(https://github.com/KhronosGroup/SPIRV-Tools/issues/2577): We do not
+    //  currently allow a dead break from a back edge block, but we could and
+    //  ultimately should.
     return !fuzzerutil::BlockIsInLoopContinueConstruct(
-               ir_context, message_.from_block(), containing_construct) ||
-           fuzzerutil::BlockIsBackEdge(ir_context, message_.from_block(),
-                                       containing_construct);
+        ir_context, message_.from_block(), containing_construct);
   }
 
   // Case (3) holds if and only if |to_block| is the merge block for this
@@ -100,9 +102,7 @@ bool TransformationAddDeadBreak::AddingBreakRespectsStructuredControlFlow(
       message_.to_block() ==
           ir_context->cfg()->block(containing_loop_header)->MergeBlockId()) {
     return !fuzzerutil::BlockIsInLoopContinueConstruct(
-               ir_context, message_.from_block(), containing_loop_header) ||
-           fuzzerutil::BlockIsBackEdge(ir_context, message_.from_block(),
-                                       containing_loop_header);
+        ir_context, message_.from_block(), containing_loop_header);
   }
   return false;
 }
@@ -112,10 +112,8 @@ bool TransformationAddDeadBreak::IsApplicable(
     const TransformationContext& transformation_context) const {
   // First, we check that a constant with the same value as
   // |message_.break_condition_value| is present.
-  const auto bool_id =
-      fuzzerutil::MaybeGetBoolConstant(ir_context, transformation_context,
-                                       message_.break_condition_value(), false);
-  if (!bool_id) {
+  if (!fuzzerutil::MaybeGetBoolConstantId(ir_context,
+                                          message_.break_condition_value())) {
     // The required constant is not present, so the transformation cannot be
     // applied.
     return false;
@@ -172,23 +170,23 @@ bool TransformationAddDeadBreak::IsApplicable(
   }
 
   // Adding the dead break is only valid if SPIR-V rules related to dominance
-  // hold.
-  return fuzzerutil::NewTerminatorPreservesDominationRules(
-      ir_context, message_.from_block(),
-      fuzzerutil::CreateUnreachableEdgeInstruction(
-          ir_context, message_.from_block(), message_.to_block(), bool_id));
+  // hold.  Rather than checking these rules explicitly, we defer to the
+  // validator.  We make a clone of the module, apply the transformation to the
+  // clone, and check whether the transformed clone is valid.
+  //
+  // In principle some of the above checks could be removed, with more reliance
+  // being places on the validator.  This should be revisited if we are sure
+  // the validator is complete with respect to checking structured control flow
+  // rules.
+  auto cloned_context = fuzzerutil::CloneIRContext(ir_context);
+  ApplyImpl(cloned_context.get());
+  return fuzzerutil::IsValid(cloned_context.get(),
+                             transformation_context.GetValidatorOptions());
 }
 
 void TransformationAddDeadBreak::Apply(
-    opt::IRContext* ir_context,
-    TransformationContext* transformation_context) const {
-  fuzzerutil::AddUnreachableEdgeAndUpdateOpPhis(
-      ir_context, ir_context->cfg()->block(message_.from_block()),
-      ir_context->cfg()->block(message_.to_block()),
-      fuzzerutil::MaybeGetBoolConstant(ir_context, *transformation_context,
-                                       message_.break_condition_value(), false),
-      message_.phi_id());
-
+    opt::IRContext* ir_context, TransformationContext* /*unused*/) const {
+  ApplyImpl(ir_context);
   // Invalidate all analyses
   ir_context->InvalidateAnalysesExceptFor(
       opt::IRContext::Analysis::kAnalysisNone);
@@ -200,8 +198,12 @@ protobufs::Transformation TransformationAddDeadBreak::ToMessage() const {
   return result;
 }
 
-std::unordered_set<uint32_t> TransformationAddDeadBreak::GetFreshIds() const {
-  return std::unordered_set<uint32_t>();
+void TransformationAddDeadBreak::ApplyImpl(
+    spvtools::opt::IRContext* ir_context) const {
+  fuzzerutil::AddUnreachableEdgeAndUpdateOpPhis(
+      ir_context, ir_context->cfg()->block(message_.from_block()),
+      ir_context->cfg()->block(message_.to_block()),
+      message_.break_condition_value(), message_.phi_id());
 }
 
 }  // namespace fuzz

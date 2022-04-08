@@ -28,6 +28,8 @@ FuzzerPassAddCompositeTypes::FuzzerPassAddCompositeTypes(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassAddCompositeTypes::~FuzzerPassAddCompositeTypes() = default;
+
 void FuzzerPassAddCompositeTypes::Apply() {
   MaybeAddMissingVectorTypes();
   MaybeAddMissingMatrixTypes();
@@ -51,13 +53,13 @@ void FuzzerPassAddCompositeTypes::MaybeAddMissingVectorTypes() {
     return FindOrCreateBoolType();
   };
   std::function<uint32_t()> float_type_supplier = [this]() -> uint32_t {
-    return FindOrCreateFloatType(32);
+    return FindOrCreate32BitFloatType();
   };
   std::function<uint32_t()> int_type_supplier = [this]() -> uint32_t {
-    return FindOrCreateIntegerType(32, true);
+    return FindOrCreate32BitIntegerType(true);
   };
   std::function<uint32_t()> uint_type_supplier = [this]() -> uint32_t {
-    return FindOrCreateIntegerType(32, false);
+    return FindOrCreate32BitIntegerType(false);
   };
 
   // Consider each of the base types with which we can make vectors.
@@ -94,8 +96,8 @@ void FuzzerPassAddCompositeTypes::MaybeAddMissingMatrixTypes() {
 void FuzzerPassAddCompositeTypes::AddNewArrayType() {
   ApplyTransformation(TransformationAddTypeArray(
       GetFuzzerContext()->GetFreshId(), ChooseScalarOrCompositeType(),
-      FindOrCreateIntegerConstant(
-          {GetFuzzerContext()->GetRandomSizeForNewArray()}, 32, false, false)));
+      FindOrCreate32BitIntegerConstant(
+          GetFuzzerContext()->GetRandomSizeForNewArray(), false)));
 }
 
 void FuzzerPassAddCompositeTypes::AddNewStructType() {
@@ -118,17 +120,10 @@ uint32_t FuzzerPassAddCompositeTypes::ChooseScalarOrCompositeType() {
       case SpvOpTypeFloat:
       case SpvOpTypeInt:
       case SpvOpTypeMatrix:
+      case SpvOpTypeStruct:
       case SpvOpTypeVector:
         candidates.push_back(inst.result_id());
         break;
-      case SpvOpTypeStruct: {
-        if (!fuzzerutil::MembersHaveBuiltInDecoration(GetIRContext(),
-                                                      inst.result_id()) &&
-            !fuzzerutil::HasBlockOrBufferBlockDecoration(GetIRContext(),
-                                                         inst.result_id())) {
-          candidates.push_back(inst.result_id());
-        }
-      } break;
       default:
         break;
     }

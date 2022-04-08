@@ -13,9 +13,6 @@
 // limitations under the License.
 
 #include "source/fuzz/fuzzer_pass_construct_composites.h"
-
-#include "gtest/gtest.h"
-#include "source/fuzz/fuzzer_util.h"
 #include "source/fuzz/pseudo_random_generator.h"
 #include "test/fuzz/fuzz_test_util.h"
 
@@ -77,17 +74,19 @@ TEST(FuzzerPassConstructCompositesTest, IsomorphicStructs) {
   const auto env = SPV_ENV_UNIVERSAL_1_3;
   const auto consumer = nullptr;
 
-  FuzzerContext fuzzer_context(MakeUnique<PseudoRandomGenerator>(0), 100,
-                               false);
+  auto prng = MakeUnique<PseudoRandomGenerator>(0);
 
   for (uint32_t i = 0; i < 10; i++) {
     const auto context =
         BuildModule(env, consumer, shader, kFuzzAssembleOption);
+    ASSERT_TRUE(IsValid(env, context.get()));
+
+    FactManager fact_manager;
     spvtools::ValidatorOptions validator_options;
-    ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(
-        context.get(), validator_options, kConsoleMessageConsumer));
-    TransformationContext transformation_context(
-        MakeUnique<FactManager>(context.get()), validator_options);
+    TransformationContext transformation_context(&fact_manager,
+                                                 validator_options);
+
+    FuzzerContext fuzzer_context(prng.get(), 100);
     protobufs::TransformationSequence transformation_sequence;
 
     FuzzerPassConstructComposites fuzzer_pass(
@@ -97,8 +96,7 @@ TEST(FuzzerPassConstructCompositesTest, IsomorphicStructs) {
     fuzzer_pass.Apply();
 
     // We just check that the result is valid.
-    ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(
-        context.get(), validator_options, kConsoleMessageConsumer));
+    ASSERT_TRUE(IsValid(env, context.get()));
   }
 }
 
@@ -158,17 +156,19 @@ TEST(FuzzerPassConstructCompositesTest, IsomorphicArrays) {
   const auto env = SPV_ENV_UNIVERSAL_1_3;
   const auto consumer = nullptr;
 
-  FuzzerContext fuzzer_context(MakeUnique<PseudoRandomGenerator>(0), 100,
-                               false);
+  auto prng = MakeUnique<PseudoRandomGenerator>(0);
 
   for (uint32_t i = 0; i < 10; i++) {
     const auto context =
         BuildModule(env, consumer, shader, kFuzzAssembleOption);
+    ASSERT_TRUE(IsValid(env, context.get()));
+
+    FactManager fact_manager;
     spvtools::ValidatorOptions validator_options;
-    ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(
-        context.get(), validator_options, kConsoleMessageConsumer));
-    TransformationContext transformation_context(
-        MakeUnique<FactManager>(context.get()), validator_options);
+    TransformationContext transformation_context(&fact_manager,
+                                                 validator_options);
+
+    FuzzerContext fuzzer_context(prng.get(), 100);
     protobufs::TransformationSequence transformation_sequence;
 
     FuzzerPassConstructComposites fuzzer_pass(
@@ -178,8 +178,7 @@ TEST(FuzzerPassConstructCompositesTest, IsomorphicArrays) {
     fuzzer_pass.Apply();
 
     // We just check that the result is valid.
-    ASSERT_TRUE(fuzzerutil::IsValidAndWellFormed(
-        context.get(), validator_options, kConsoleMessageConsumer));
+    ASSERT_TRUE(IsValid(env, context.get()));
   }
 }
 

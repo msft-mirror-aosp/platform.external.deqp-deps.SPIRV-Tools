@@ -27,6 +27,8 @@ FuzzerPassAddStores::FuzzerPassAddStores(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassAddStores::~FuzzerPassAddStores() = default;
+
 void FuzzerPassAddStores::Apply() {
   ForEachInstructionWithInstructionDescriptor(
       [this](opt::Function* function, opt::BasicBlock* block,
@@ -66,11 +68,12 @@ void FuzzerPassAddStores::Apply() {
                     // Not a pointer.
                     return false;
                   }
-                  if (instruction->IsReadOnlyPointer()) {
-                    // Read only: cannot store to it.
+                  if (type_inst->GetSingleWordInOperand(0) ==
+                      SpvStorageClassInput) {
+                    // Read-only: cannot store to it.
                     return false;
                   }
-                  switch (instruction->opcode()) {
+                  switch (instruction->result_id()) {
                     case SpvOpConstantNull:
                     case SpvOpUndef:
                       // Do not allow storing to a null or undefined pointer;

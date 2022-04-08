@@ -21,8 +21,9 @@ namespace spvtools {
 namespace fuzz {
 
 TransformationSwapCommutableOperands::TransformationSwapCommutableOperands(
-    protobufs::TransformationSwapCommutableOperands message)
-    : message_(std::move(message)) {}
+    const spvtools::fuzz::protobufs::TransformationSwapCommutableOperands&
+        message)
+    : message_(message) {}
 
 TransformationSwapCommutableOperands::TransformationSwapCommutableOperands(
     const protobufs::InstructionDescriptor& instruction_descriptor) {
@@ -30,7 +31,8 @@ TransformationSwapCommutableOperands::TransformationSwapCommutableOperands(
 }
 
 bool TransformationSwapCommutableOperands::IsApplicable(
-    opt::IRContext* ir_context, const TransformationContext& /*unused*/) const {
+    opt::IRContext* ir_context, const TransformationContext& /*unused*/
+    ) const {
   auto instruction =
       FindInstruction(message_.instruction_descriptor(), ir_context);
   if (instruction == nullptr) return false;
@@ -44,7 +46,8 @@ bool TransformationSwapCommutableOperands::IsApplicable(
 }
 
 void TransformationSwapCommutableOperands::Apply(
-    opt::IRContext* ir_context, TransformationContext* /*unused*/) const {
+    opt::IRContext* ir_context, TransformationContext* /*unused*/
+    ) const {
   auto instruction =
       FindInstruction(message_.instruction_descriptor(), ir_context);
   // By design, the instructions defined to be commutative have exactly two
@@ -57,11 +60,6 @@ protobufs::Transformation TransformationSwapCommutableOperands::ToMessage()
   protobufs::Transformation result;
   *result.mutable_swap_commutable_operands() = message_;
   return result;
-}
-
-std::unordered_set<uint32_t> TransformationSwapCommutableOperands::GetFreshIds()
-    const {
-  return std::unordered_set<uint32_t>();
 }
 
 }  // namespace fuzz

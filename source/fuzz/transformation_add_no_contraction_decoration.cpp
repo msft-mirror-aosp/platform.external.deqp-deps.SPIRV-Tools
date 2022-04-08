@@ -21,8 +21,9 @@ namespace fuzz {
 
 TransformationAddNoContractionDecoration::
     TransformationAddNoContractionDecoration(
-        protobufs::TransformationAddNoContractionDecoration message)
-    : message_(std::move(message)) {}
+        const spvtools::fuzz::protobufs::
+            TransformationAddNoContractionDecoration& message)
+    : message_(message) {}
 
 TransformationAddNoContractionDecoration::
     TransformationAddNoContractionDecoration(uint32_t result_id) {
@@ -102,11 +103,6 @@ bool TransformationAddNoContractionDecoration::IsArithmetic(uint32_t opcode) {
     default:
       return false;
   }
-}
-
-std::unordered_set<uint32_t>
-TransformationAddNoContractionDecoration::GetFreshIds() const {
-  return std::unordered_set<uint32_t>();
 }
 
 }  // namespace fuzz

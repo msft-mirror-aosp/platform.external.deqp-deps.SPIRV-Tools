@@ -26,6 +26,8 @@ FuzzerPassPermuteBlocks::FuzzerPassPermuteBlocks(
     : FuzzerPass(ir_context, transformation_context, fuzzer_context,
                  transformations) {}
 
+FuzzerPassPermuteBlocks::~FuzzerPassPermuteBlocks() = default;
+
 void FuzzerPassPermuteBlocks::Apply() {
   // For now we do something very simple: we randomly decide whether to move a
   // block, and for each block that we do move, we push it down as far as we
@@ -65,7 +67,12 @@ void FuzzerPassPermuteBlocks::Apply() {
       // down indefinitely.
       while (true) {
         TransformationMoveBlockDown transformation(*id);
-        if (!MaybeApplyTransformation(transformation)) {
+        if (transformation.IsApplicable(GetIRContext(),
+                                        *GetTransformationContext())) {
+          transformation.Apply(GetIRContext(), GetTransformationContext());
+          *GetTransformations()->add_transformation() =
+              transformation.ToMessage();
+        } else {
           break;
         }
       }

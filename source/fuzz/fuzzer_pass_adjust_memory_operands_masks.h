@@ -29,6 +29,8 @@ class FuzzerPassAdjustMemoryOperandsMasks : public FuzzerPass {
       FuzzerContext* fuzzer_context,
       protobufs::TransformationSequence* transformations);
 
+  ~FuzzerPassAdjustMemoryOperandsMasks();
+
   void Apply() override;
 };
 

@@ -26,7 +26,7 @@ namespace fuzz {
 class TransformationSetFunctionControl : public Transformation {
  public:
   explicit TransformationSetFunctionControl(
-      protobufs::TransformationSetFunctionControl message);
+      const protobufs::TransformationSetFunctionControl& message);
 
   TransformationSetFunctionControl(uint32_t function_id,
                                    uint32_t function_control);
@@ -45,8 +45,6 @@ class TransformationSetFunctionControl : public Transformation {
   // over-written with |message_.function_control|.
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
-
-  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 
