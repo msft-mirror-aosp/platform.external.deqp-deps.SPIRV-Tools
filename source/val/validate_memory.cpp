@@ -466,6 +466,7 @@ spv_result_t ValidateVariable(ValidationState_t& _, const Instruction* inst) {
 
   if (!_.IsValidStorageClass(storage_class)) {
     return _.diag(SPV_ERROR_INVALID_BINARY, inst)
+           << _.VkErrorID(4643)
            << "Invalid storage class for target environment";
   }
 
@@ -536,18 +537,14 @@ spv_result_t ValidateVariable(ValidationState_t& _, const Instruction* inst) {
       if (!IsAllowedTypeOrArrayOfSame(
               _, pointee,
               {SpvOpTypeImage, SpvOpTypeSampler, SpvOpTypeSampledImage,
-               SpvOpTypeAccelerationStructureNV,
-               SpvOpTypeAccelerationStructureKHR, SpvOpTypeRayQueryKHR})) {
+               SpvOpTypeAccelerationStructureKHR})) {
         return _.diag(SPV_ERROR_INVALID_ID, inst)
-               << "UniformConstant OpVariable <id> '" << _.getIdName(inst->id())
-               << "' has illegal type.\n"
-               << "From Vulkan spec, section 14.5.2:\n"
+               << _.VkErrorID(4655) << "UniformConstant OpVariable <id> '"
+               << _.getIdName(inst->id()) << "' has illegal type.\n"
                << "Variables identified with the UniformConstant storage class "
                << "are used only as handles to refer to opaque resources. Such "
                << "variables must be typed as OpTypeImage, OpTypeSampler, "
-               << "OpTypeSampledImage, OpTypeAccelerationStructureNV, "
-                  "OpTypeAccelerationStructureKHR, "
-                  "OpTypeRayQueryKHR, "
+               << "OpTypeSampledImage, OpTypeAccelerationStructureKHR, "
                << "or an array of one of these types.";
       }
     }
@@ -894,6 +891,12 @@ spv_result_t ValidateLoad(ValidationState_t& _, const Instruction* inst) {
            << "OpLoad Result Type <id> '" << _.getIdName(inst->type_id())
            << "' does not match Pointer <id> '" << _.getIdName(pointer->id())
            << "'s type.";
+  }
+
+  if (!_.options()->before_hlsl_legalization &&
+      _.ContainsRuntimeArray(inst->type_id())) {
+    return _.diag(SPV_ERROR_INVALID_ID, inst)
+           << "Cannot load a runtime-sized array";
   }
 
   if (auto error = CheckMemoryAccess(_, inst, 3)) return error;
@@ -1408,7 +1411,7 @@ spv_result_t ValidateArrayLength(ValidationState_t& state,
            << state.getIdName(inst->id()) << "' must be an OpTypeRuntimeArray.";
   }
 
-  // The array member must the the index of the last element (the run time
+  // The array member must the index of the last element (the run time
   // array).
   if (inst->GetOperandAs<uint32_t>(3) != num_of_members - 1) {
     return state.diag(SPV_ERROR_INVALID_ID, inst)
