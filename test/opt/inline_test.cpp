@@ -4339,7 +4339,7 @@ OpFunctionEnd
 
 TEST_F(InlineTest, CreateDebugInlinedAtFromDebugLine) {
   const std::string text = R"(OpCapability Shader
-; CHECK: OpExtInst %void %1 DebugInlinedAt %uint_6_0
+; CHECK: OpExtInst %void %1 DebugInlinedAt %uint_6
 OpExtension "SPV_KHR_non_semantic_info"
 %1 = OpExtInstImport "NonSemantic.Shader.DebugInfo.100"
 OpMemoryModel Logical GLSL450
@@ -4437,7 +4437,7 @@ OpFunctionEnd
 //    Callee function returns a value generated outside the callee,
 //      e.g. a constant value. This might exercise some logic not yet
 //      exercised by the current tests: the false branch in the "if"
-//      inside the SpvOpReturnValue case in InlinePass::GenInlineCode?
+//      inside the spv::Op::OpReturnValue case in InlinePass::GenInlineCode?
 //    SampledImage before function call, but callee is only single block.
 //      Then the SampledImage instruction is not cloned. Documents existing
 //      behaviour.
