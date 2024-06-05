@@ -15,12 +15,9 @@
 #include "source/opt/fold_spec_constant_op_and_composite_pass.h"
 
 #include <algorithm>
-#include <initializer_list>
 #include <tuple>
 
 #include "source/opt/constants.h"
-#include "source/opt/fold.h"
-#include "source/opt/ir_context.h"
 #include "source/util/make_unique.h"
 
 namespace spvtools {
@@ -28,6 +25,7 @@ namespace opt {
 
 Pass::Status FoldSpecConstantOpAndCompositePass::Process() {
   bool modified = false;
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
   // Traverse through all the constant defining instructions. For Normal
   // Constants whose values are determined and do not depend on OpUndef
   // instructions, records their values in two internal maps: id_to_const_val_
@@ -62,17 +60,17 @@ Pass::Status FoldSpecConstantOpAndCompositePass::Process() {
     // used in OpSpecConstant{Composite|Op} instructions.
     // TODO(qining): If the constant or its type has decoration, we may need
     // to skip it.
-    if (context()->get_constant_mgr()->GetType(inst) &&
-        !context()->get_constant_mgr()->GetType(inst)->decoration_empty())
+    if (const_mgr->GetType(inst) &&
+        !const_mgr->GetType(inst)->decoration_empty())
       continue;
-    switch (SpvOp opcode = inst->opcode()) {
+    switch (spv::Op opcode = inst->opcode()) {
       // Records the values of Normal Constants.
-      case SpvOp::SpvOpConstantTrue:
-      case SpvOp::SpvOpConstantFalse:
-      case SpvOp::SpvOpConstant:
-      case SpvOp::SpvOpConstantNull:
-      case SpvOp::SpvOpConstantComposite:
-      case SpvOp::SpvOpSpecConstantComposite: {
+      case spv::Op::OpConstantTrue:
+      case spv::Op::OpConstantFalse:
+      case spv::Op::OpConstant:
+      case spv::Op::OpConstantNull:
+      case spv::Op::OpConstantComposite:
+      case spv::Op::OpSpecConstantComposite: {
         // A Constant instance will be created if the given instruction is a
         // Normal Constant whose value(s) are fixed. Note that for a composite
         // Spec Constant defined with OpSpecConstantComposite instruction, if
@@ -80,15 +78,14 @@ Pass::Status FoldSpecConstantOpAndCompositePass::Process() {
         // Constant will be turned in to a Normal Constant. In that case, a
         // Constant instance should also be created successfully and recorded
         // in the id_to_const_val_ and const_val_to_id_ mapps.
-        if (auto const_value =
-                context()->get_constant_mgr()->GetConstantFromInst(inst)) {
+        if (auto const_value = const_mgr->GetConstantFromInst(inst)) {
           // Need to replace the OpSpecConstantComposite instruction with a
           // corresponding OpConstantComposite instruction.
-          if (opcode == SpvOp::SpvOpSpecConstantComposite) {
-            inst->SetOpcode(SpvOp::SpvOpConstantComposite);
+          if (opcode == spv::Op::OpSpecConstantComposite) {
+            inst->SetOpcode(spv::Op::OpConstantComposite);
             modified = true;
           }
-          context()->get_constant_mgr()->MapConstantToInst(const_value, inst);
+          const_mgr->MapConstantToInst(const_value, inst);
         }
         break;
       }
@@ -99,7 +96,7 @@ Pass::Status FoldSpecConstantOpAndCompositePass::Process() {
       // Constants will be added to id_to_const_val_ and const_val_to_id_ so
       // that we can use the new Normal Constants when folding following Spec
       // Constants.
-      case SpvOp::SpvOpSpecConstantOp:
+      case spv::Op::OpSpecConstantOp:
         modified |= ProcessOpSpecConstantOp(&inst_iter);
         break;
       default:
@@ -118,20 +115,9 @@ bool FoldSpecConstantOpAndCompositePass::ProcessOpSpecConstantOp(
          "The first in-operand of OpSpecConstantOp instruction must be of "
          "SPV_OPERAND_TYPE_SPEC_CONSTANT_OP_NUMBER type");
 
-  switch (static_cast<SpvOp>(inst->GetSingleWordInOperand(0))) {
-    case SpvOp::SpvOpCompositeExtract:
-    case SpvOp::SpvOpVectorShuffle:
-    case SpvOp::SpvOpCompositeInsert:
-    case SpvOp::SpvOpQuantizeToF16:
-      folded_inst = FoldWithInstructionFolder(pos);
-      break;
-    default:
-      // TODO: This should use the instruction folder as well, but some folding
-      // rules are missing.
-
-      // Component-wise operations.
-      folded_inst = DoComponentWiseOperation(pos);
-      break;
+  folded_inst = FoldWithInstructionFolder(pos);
+  if (!folded_inst) {
+    folded_inst = DoComponentWiseOperation(pos);
   }
   if (!folded_inst) return false;
 
@@ -146,6 +132,7 @@ bool FoldSpecConstantOpAndCompositePass::ProcessOpSpecConstantOp(
 
 Instruction* FoldSpecConstantOpAndCompositePass::FoldWithInstructionFolder(
     Module::inst_iterator* inst_iter_ptr) {
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
   // If one of operands to the instruction is not a
   // constant, then we cannot fold this spec constant.
   for (uint32_t i = 1; i < (*inst_iter_ptr)->NumInOperands(); i++) {
@@ -155,7 +142,7 @@ Instruction* FoldSpecConstantOpAndCompositePass::FoldWithInstructionFolder(
       continue;
     }
     uint32_t id = operand.words[0];
-    if (context()->get_constant_mgr()->FindDeclaredConstant(id) == nullptr) {
+    if (const_mgr->FindDeclaredConstant(id) == nullptr) {
       return nullptr;
     }
   }
@@ -164,7 +151,7 @@ Instruction* FoldSpecConstantOpAndCompositePass::FoldWithInstructionFolder(
   // instruction and pass it to the instruction folder.
   std::unique_ptr<Instruction> inst((*inst_iter_ptr)->Clone(context()));
   inst->SetOpcode(
-      static_cast<SpvOp>((*inst_iter_ptr)->GetSingleWordInOperand(0)));
+      static_cast<spv::Op>((*inst_iter_ptr)->GetSingleWordInOperand(0)));
   inst->RemoveOperand(2);
 
   // We want the current instruction to be replaced by an |OpConstant*|
@@ -178,8 +165,9 @@ Instruction* FoldSpecConstantOpAndCompositePass::FoldWithInstructionFolder(
   Instruction* new_const_inst =
       context()->get_instruction_folder().FoldInstructionToConstant(
           inst.get(), identity_map);
-  assert(new_const_inst != nullptr &&
-         "Failed to fold instruction that must be folded.");
+
+  // new_const_inst == null indicates we cannot fold this spec constant
+  if (!new_const_inst) return nullptr;
 
   // Get the instruction before |pos| to insert after.  |pos| cannot be the
   // first instruction in the list because its type has to come first.
@@ -202,6 +190,7 @@ Instruction* FoldSpecConstantOpAndCompositePass::FoldWithInstructionFolder(
     new_const_inst->InsertAfter(insert_pos);
     get_def_use_mgr()->AnalyzeInstDefUse(new_const_inst);
   }
+  const_mgr->MapInst(new_const_inst);
   return new_const_inst;
 }
 
@@ -285,9 +274,9 @@ utils::SmallVector<uint32_t, 2> EncodeIntegerAsWords(const analysis::Type& type,
 Instruction* FoldSpecConstantOpAndCompositePass::DoComponentWiseOperation(
     Module::inst_iterator* pos) {
   const Instruction* inst = &**pos;
-  const analysis::Type* result_type =
-      context()->get_constant_mgr()->GetType(inst);
-  SpvOp spec_opcode = static_cast<SpvOp>(inst->GetSingleWordInOperand(0));
+  analysis::ConstantManager* const_mgr = context()->get_constant_mgr();
+  const analysis::Type* result_type = const_mgr->GetType(inst);
+  spv::Op spec_opcode = static_cast<spv::Op>(inst->GetSingleWordInOperand(0));
   // Check and collect operands.
   std::vector<const analysis::Constant*> operands;
 
@@ -311,10 +300,9 @@ Instruction* FoldSpecConstantOpAndCompositePass::DoComponentWiseOperation(
     // Scalar operation
     const uint32_t result_val =
         context()->get_instruction_folder().FoldScalars(spec_opcode, operands);
-    auto result_const = context()->get_constant_mgr()->GetConstant(
+    auto result_const = const_mgr->GetConstant(
         result_type, EncodeIntegerAsWords(*result_type, result_val));
-    return context()->get_constant_mgr()->BuildInstructionAndAddToModule(
-        result_const, pos);
+    return const_mgr->BuildInstructionAndAddToModule(result_const, pos);
   } else if (result_type->AsVector()) {
     // Vector operation
     const analysis::Type* element_type =
@@ -325,11 +313,10 @@ Instruction* FoldSpecConstantOpAndCompositePass::DoComponentWiseOperation(
                                                         operands);
     std::vector<const analysis::Constant*> result_vector_components;
     for (const uint32_t r : result_vec) {
-      if (auto rc = context()->get_constant_mgr()->GetConstant(
+      if (auto rc = const_mgr->GetConstant(
               element_type, EncodeIntegerAsWords(*element_type, r))) {
         result_vector_components.push_back(rc);
-        if (!context()->get_constant_mgr()->BuildInstructionAndAddToModule(
-                rc, pos)) {
+        if (!const_mgr->BuildInstructionAndAddToModule(rc, pos)) {
           assert(false &&
                  "Failed to build and insert constant declaring instruction "
                  "for the given vector component constant");
@@ -340,10 +327,8 @@ Instruction* FoldSpecConstantOpAndCompositePass::DoComponentWiseOperation(
     }
     auto new_vec_const = MakeUnique<analysis::VectorConstant>(
         result_type->AsVector(), result_vector_components);
-    auto reg_vec_const = context()->get_constant_mgr()->RegisterConstant(
-        std::move(new_vec_const));
-    return context()->get_constant_mgr()->BuildInstructionAndAddToModule(
-        reg_vec_const, pos);
+    auto reg_vec_const = const_mgr->RegisterConstant(std::move(new_vec_const));
+    return const_mgr->BuildInstructionAndAddToModule(reg_vec_const, pos);
   } else {
     // Cannot process invalid component wise operation. The result of component
     // wise operation must be of integer or bool scalar or vector of
