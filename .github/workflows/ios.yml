@@ -2,17 +2,20 @@ name: iOS
 permissions:
   contents: read
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_run:
+    # iOS is 10x expensive to run on GitHub machines, so only run if we know something else passed
+    workflows: ["Wasm Build"]
+    types:
+      - completed
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-        matrix:
-          os: [ macos-12, macos-13 ]
+    runs-on: macos-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        - uses: lukka/get-cmake@139aae96315b496d9af1b5e9abe53b15ca7eece8 # v3.28.3
+        - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        - uses: lukka/get-cmake@71b7adfe2603f48bb9ed50d2b01a72499ae94885 # v3.31.0
         - name: Download dependencies
           run: python3 utils/git-sync-deps
         # NOTE: The MacOS SDK ships universal binaries. CI should reflect this.
