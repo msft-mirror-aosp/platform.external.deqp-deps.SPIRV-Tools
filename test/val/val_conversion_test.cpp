@@ -39,6 +39,7 @@ std::string GenerateShaderCode(
   const std::string capabilities =
       R"(
 OpCapability Shader
+OpCapability Float16
 OpCapability Int64
 OpCapability Float64)";
 
@@ -54,6 +55,7 @@ OpExecutionMode %main OriginUpperLeft)";
 %func = OpTypeFunction %void
 %bool = OpTypeBool
 %f32 = OpTypeFloat 32
+%f16 = OpTypeFloat 16
 %u32 = OpTypeInt 32 0
 %s32 = OpTypeInt 32 1
 %f64 = OpTypeFloat 64
@@ -83,6 +85,8 @@ OpExecutionMode %main OriginUpperLeft)";
 %f32_2 = OpConstant %f32 2
 %f32_3 = OpConstant %f32 3
 %f32_4 = OpConstant %f32 4
+
+%f16_1 = OpConstant %f16 1
 
 %s32_0 = OpConstant %s32 0
 %s32_1 = OpConstant %s32 1
@@ -581,7 +585,7 @@ TEST_F(ValidateConversion, FConvertDifferentDimension) {
                         "Type: FConvert"));
 }
 
-TEST_F(ValidateConversion, FConvertSameBitWidth) {
+TEST_F(ValidateConversion, FConvertSameBitWidthNoEncoding) {
   const std::string body = R"(
 %val = OpFConvert %f32 %f32_1
 )";
@@ -589,8 +593,46 @@ TEST_F(ValidateConversion, FConvertSameBitWidth) {
   CompileSuccessfully(GenerateShaderCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to have different bit width from "
-                        "Result Type: FConvert"));
+              HasSubstr("Expected component type of Value to be different from "
+                        "component type of Result Type: FConvert"));
+}
+
+TEST_F(ValidateConversion, ValidFConvertSameBitWidthDifferentEncoding) {
+  const std::string extensions = R"(
+OpCapability Float8EXT
+OpExtension "SPV_EXT_float8"
+)";
+  const std::string types = R"(
+%fp8e4m3 = OpTypeFloat 8 Float8E4M3EXT
+%fp8e5m2 = OpTypeFloat 8 Float8E5M2EXT
+%fp8e4m3_1 = OpConstant %fp8e4m3 1
+%fp8e5m2_1 = OpConstant %fp8e5m2 1
+)";
+  const std::string body = R"(
+%val1 = OpFConvert %fp8e4m3 %fp8e5m2_1
+%val2 = OpFConvert %fp8e5m2 %fp8e4m3_1
+)";
+
+  CompileSuccessfully(GenerateShaderCode(body, extensions, "", types).c_str());
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
+}
+
+TEST_F(ValidateConversion, FConvertFloat16ToBFloat16) {
+  const std::string extensions = R"(
+OpCapability BFloat16TypeKHR
+OpExtension "SPV_KHR_bfloat16"
+)";
+
+  const std::string types = R"(
+%bf16 = OpTypeFloat 16 BFloat16KHR
+)";
+
+  const std::string body = R"(
+%val = OpFConvert %bf16 %f16_1
+)";
+
+  CompileSuccessfully(GenerateShaderCode(body, extensions, "", types).c_str());
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
 }
 
 TEST_F(ValidateConversion, QuantizeToF16Success) {
@@ -1196,9 +1238,10 @@ OpCapability Shader
 OpCapability Float16
 OpCapability Int16
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModelKHR
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_KHR_vulkan_memory_model"
-OpMemoryModel Logical GLSL450
+OpMemoryModel Logical VulkanKHR
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %func = OpTypeFunction %void
@@ -1263,8 +1306,8 @@ OpEntryPoint GLCompute %main "main"
 OpReturn
 OpFunctionEnd)";
 
-  CompileSuccessfully(body.c_str());
-  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
+  CompileSuccessfully(body.c_str(), SPV_ENV_UNIVERSAL_1_3);
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
 }
 
 TEST_F(ValidateConversion, CoopMatKHRConversionUseMismatchFail) {
@@ -1273,9 +1316,10 @@ OpCapability Shader
 OpCapability Float16
 OpCapability Int16
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModelKHR
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_KHR_vulkan_memory_model"
-OpMemoryModel Logical GLSL450
+OpMemoryModel Logical VulkanKHR
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %func = OpTypeFunction %void
@@ -1308,8 +1352,9 @@ OpEntryPoint GLCompute %main "main"
 OpReturn
 OpFunctionEnd)";
 
-  CompileSuccessfully(body.c_str());
-  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
+  CompileSuccessfully(body.c_str(), SPV_ENV_UNIVERSAL_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA,
+            ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
   EXPECT_THAT(
       getDiagnosticString(),
       HasSubstr("Expected Use of Matrix type and Result Type to be identical"));
@@ -1321,9 +1366,10 @@ OpCapability Shader
 OpCapability Float16
 OpCapability Int16
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModelKHR
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_KHR_vulkan_memory_model"
-OpMemoryModel Logical GLSL450
+OpMemoryModel Logical VulkanKHR
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %func = OpTypeFunction %void
@@ -1356,8 +1402,9 @@ OpEntryPoint GLCompute %main "main"
 OpReturn
 OpFunctionEnd)";
 
-  CompileSuccessfully(body.c_str());
-  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
+  CompileSuccessfully(body.c_str(), SPV_ENV_UNIVERSAL_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA,
+            ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
   EXPECT_THAT(
       getDiagnosticString(),
       HasSubstr("Expected scopes of Matrix and Result Type to be identical"));
@@ -2147,10 +2194,11 @@ OpCapability Float16
 OpCapability Int16
 OpCapability CooperativeMatrixConversionsNV
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModelKHR
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_NV_cooperative_matrix2"
 OpExtension "SPV_KHR_vulkan_memory_model"
-OpMemoryModel Logical GLSL450
+OpMemoryModel Logical VulkanKHR
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %func = OpTypeFunction %void
@@ -2276,8 +2324,8 @@ OpEntryPoint GLCompute %main "main"
 OpReturn
 OpFunctionEnd)";
 
-  CompileSuccessfully(body.c_str());
-  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
+  CompileSuccessfully(body.c_str(), SPV_ENV_UNIVERSAL_1_3);
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
 }
 
 TEST_F(ValidateConversion, CoopMat2TransposeShapeFail) {
@@ -2287,10 +2335,11 @@ OpCapability Float16
 OpCapability Int16
 OpCapability CooperativeMatrixConversionsNV
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModelKHR
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_NV_cooperative_matrix2"
 OpExtension "SPV_KHR_vulkan_memory_model"
-OpMemoryModel Logical GLSL450
+OpMemoryModel Logical VulkanKHR
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %func = OpTypeFunction %void
@@ -2319,13 +2368,139 @@ OpEntryPoint GLCompute %main "main"
 OpReturn
 OpFunctionEnd)";
 
-  CompileSuccessfully(body.c_str());
-  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
+  CompileSuccessfully(body.c_str(), SPV_ENV_UNIVERSAL_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA,
+            ValidateInstructions(SPV_ENV_UNIVERSAL_1_3));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("Expected rows of Matrix type and Result Type to be "
                         "swapped with columns"));
 }
 
+TEST_F(ValidateConversion, CoopVecConversionSuccess) {
+  const std::string body = R"(
+OpCapability Shader
+OpCapability Float16
+OpCapability Int16
+OpCapability CooperativeVectorNV
+OpCapability ReplicatedCompositesEXT
+OpExtension "SPV_NV_cooperative_vector"
+OpExtension "SPV_EXT_replicated_composites"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+%void = OpTypeVoid
+%func = OpTypeFunction %void
+%bool = OpTypeBool
+%f16 = OpTypeFloat 16
+%f32 = OpTypeFloat 32
+%u16 = OpTypeInt 16 0
+%u32 = OpTypeInt 32 0
+%s16 = OpTypeInt 16 1
+%s32 = OpTypeInt 32 1
+
+%u32_8 = OpConstant %u32 8
+%use_A = OpConstant %u32 0
+%subgroup = OpConstant %u32 3
+
+%f16vec = OpTypeCooperativeVectorNV %f16 %u32_8
+%f32vec = OpTypeCooperativeVectorNV %f32 %u32_8
+%u16vec = OpTypeCooperativeVectorNV %u16 %u32_8
+%u32vec = OpTypeCooperativeVectorNV %u32 %u32_8
+%s16vec = OpTypeCooperativeVectorNV %s16 %u32_8
+%s32vec = OpTypeCooperativeVectorNV %s32 %u32_8
+
+%f16_1 = OpConstant %f16 1
+%f32_1 = OpConstant %f32 1
+%u16_1 = OpConstant %u16 1
+%u32_1 = OpConstant %u32 1
+%s16_1 = OpConstant %s16 1
+%s32_1 = OpConstant %s32 1
+
+%f16vec_1 = OpConstantCompositeReplicateEXT %f16vec %f16_1
+%f32vec_1 = OpConstantCompositeReplicateEXT %f32vec %f32_1
+%u16vec_1 = OpConstantCompositeReplicateEXT %u16vec %u16_1
+%u32vec_1 = OpConstantCompositeReplicateEXT %u32vec %u32_1
+%s16vec_1 = OpConstantCompositeReplicateEXT %s16vec %s16_1
+%s32vec_1 = OpConstantCompositeReplicateEXT %s32vec %s32_1
+
+%main = OpFunction %void None %func
+%main_entry = OpLabel
+
+%val11 = OpConvertFToU %u16vec %f16vec_1
+%val12 = OpConvertFToU %u32vec %f16vec_1
+%val13 = OpConvertFToS %s16vec %f16vec_1
+%val14 = OpConvertFToS %s32vec %f16vec_1
+%val15 = OpFConvert %f32vec %f16vec_1
+
+%val21 = OpConvertFToU %u16vec %f32vec_1
+%val22 = OpConvertFToU %u32vec %f32vec_1
+%val23 = OpConvertFToS %s16vec %f32vec_1
+%val24 = OpConvertFToS %s32vec %f32vec_1
+%val25 = OpFConvert %f16vec %f32vec_1
+
+%val31 = OpConvertUToF %f16vec %u16vec_1
+%val32 = OpConvertUToF %f32vec %u16vec_1
+%val33 = OpUConvert %u32vec %u16vec_1
+%val34 = OpSConvert %s32vec %u16vec_1
+
+%val41 = OpConvertSToF %f16vec %s16vec_1
+%val42 = OpConvertSToF %f32vec %s16vec_1
+%val43 = OpUConvert %u32vec %s16vec_1
+%val44 = OpSConvert %s32vec %s16vec_1
+
+OpReturn
+OpFunctionEnd)";
+
+  CompileSuccessfully(body.c_str());
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
+}
+
+TEST_F(ValidateConversion, CoopVecConversionDimMismatchFail) {
+  const std::string body = R"(
+OpCapability Shader
+OpCapability Float16
+OpCapability Int16
+OpCapability CooperativeVectorNV
+OpCapability ReplicatedCompositesEXT
+OpExtension "SPV_NV_cooperative_vector"
+OpExtension "SPV_EXT_replicated_composites"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+%void = OpTypeVoid
+%func = OpTypeFunction %void
+%bool = OpTypeBool
+%f16 = OpTypeFloat 16
+%f32 = OpTypeFloat 32
+%u16 = OpTypeInt 16 0
+%u32 = OpTypeInt 32 0
+%s16 = OpTypeInt 16 1
+%s32 = OpTypeInt 32 1
+
+%u32_8 = OpConstant %u32 8
+%u32_4 = OpConstant %u32 4
+%subgroup = OpConstant %u32 3
+%use_A = OpConstant %u32 0
+%use_B = OpConstant %u32 1
+
+%f16vec = OpTypeCooperativeVectorNV %f16 %u32_8
+%f32vec = OpTypeCooperativeVectorNV %f32 %u32_4
+
+%f16_1 = OpConstant %f16 1
+
+%f16vec_1 = OpConstantCompositeReplicateEXT %f16vec %f16_1
+
+%main = OpFunction %void None %func
+%main_entry = OpLabel
+
+%val1 = OpFConvert %f32vec %f16vec_1
+
+OpReturn
+OpFunctionEnd)";
+
+  CompileSuccessfully(body.c_str());
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Expected number of components to be identical"));
+}
 }  // namespace
 }  // namespace val
 }  // namespace spvtools
