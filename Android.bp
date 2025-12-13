@@ -31,23 +31,10 @@ license {
 }
 
 genrule {
-    name: "deqp_spvtools_generate_grammar_tables",
+    name: "deqp_spvtools_ggt",
     out: [
-        "core.insts-unified1.inc",
-        "debuginfo.insts.inc",
-        "enum_string_mapping.inc",
-        "extension_enum.inc",
-        "glsl.std.450.insts.inc",
-        "nonsemantic.clspvreflection.insts.inc",
-        "nonsemantic.vkspreflection.insts.inc",
-        "nonsemantic.shader.debuginfo.100.insts.inc",
-        "opencl.debuginfo.100.insts.inc",
-        "opencl.std.insts.inc",
-        "operand.kinds-unified1.inc",
-        "spv-amd-gcn-shader.insts.inc",
-        "spv-amd-shader-ballot.insts.inc",
-        "spv-amd-shader-explicit-vertex-parameter.insts.inc",
-        "spv-amd-shader-trinary-minmax.insts.inc",
+        "core_tables_body.inc",
+        "core_tables_header.inc",
     ],
     srcs: [
         ":deqp_spirv_headers_unified1_extinst.debuginfo.grammar.json",
@@ -63,21 +50,8 @@ genrule {
         ":deqp_spirv_headers_unified1_extinst.spv-amd-shader-trinary-minmax.grammar.json",
         ":deqp_spirv_headers_unified1_spirv.core.grammar.json",
     ],
-    tool_files: ["utils/generate_grammar_tables.py"],
-    cmd:
-        "$(location) --output-language=c++ --extinst-glsl-grammar=$(location :deqp_spirv_headers_unified1_extinst.glsl.std.450.grammar.json) --glsl-insts-output=$(location glsl.std.450.insts.inc); "+
-        "$(location) --output-language=c++ --extinst-opencl-grammar=$(location :deqp_spirv_headers_unified1_extinst.opencl.std.100.grammar.json) --opencl-insts-output=$(location opencl.std.insts.inc); "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.debuginfo.grammar.json) --vendor-insts-output=$(location debuginfo.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.clspvreflection.grammar.json) --vendor-insts-output=$(location nonsemantic.clspvreflection.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.vkspreflection.grammar.json) --vendor-insts-output=$(location nonsemantic.vkspreflection.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.shader.debuginfo.100.grammar.json) --vendor-insts-output=$(location nonsemantic.shader.debuginfo.100.insts.inc) --vendor-operand-kind-prefix=SHDEBUG100_; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.opencl.debuginfo.100.grammar.json) --vendor-insts-output=$(location opencl.debuginfo.100.insts.inc) --vendor-operand-kind-prefix=CLDEBUG100_; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.spv-amd-gcn-shader.grammar.json) --vendor-insts-output=$(location spv-amd-gcn-shader.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-ballot.grammar.json) --vendor-insts-output=$(location spv-amd-shader-ballot.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-explicit-vertex-parameter.grammar.json) --vendor-insts-output=$(location spv-amd-shader-explicit-vertex-parameter.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --extinst-vendor-grammar=$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-trinary-minmax.grammar.json) --vendor-insts-output=$(location spv-amd-shader-trinary-minmax.insts.inc) --vendor-operand-kind-prefix=; "+
-        "$(location) --output-language=c++ --spirv-core-grammar=$(location :deqp_spirv_headers_unified1_spirv.core.grammar.json) --extinst-debuginfo-grammar=$(location :deqp_spirv_headers_unified1_extinst.debuginfo.grammar.json) --extinst-cldebuginfo100-grammar=$(location :deqp_spirv_headers_unified1_extinst.opencl.debuginfo.100.grammar.json) --core-insts-output=$(location core.insts-unified1.inc) --operand-kinds-output=$(location operand.kinds-unified1.inc); "+
-        "$(location) --output-language=c++ --spirv-core-grammar=$(location :deqp_spirv_headers_unified1_spirv.core.grammar.json) --extinst-debuginfo-grammar=$(location :deqp_spirv_headers_unified1_extinst.debuginfo.grammar.json) --extinst-cldebuginfo100-grammar=$(location :deqp_spirv_headers_unified1_extinst.opencl.debuginfo.100.grammar.json) --extension-enum-output=$(location extension_enum.inc) --enum-string-mapping-output=$(location enum_string_mapping.inc); "
+    tool_files: ["utils/ggt.py", "utils/Table/Context.py", "utils/Table/IndexRange.py", "utils/Table/StringList.py", "utils/Table/Operand.py"],
+    cmd: "$(location) --core-tables-body-output=$(location core_tables_body.inc) --core-tables-header-output=$(location core_tables_header.inc) --spirv-core-grammar=$(location :deqp_spirv_headers_unified1_spirv.core.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.glsl.std.450.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.opencl.std.100.grammar.json) --extinst=CLDEBUG100_,$(location :deqp_spirv_headers_unified1_extinst.opencl.debuginfo.100.grammar.json) --extinst=SHDEBUG100_,$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.shader.debuginfo.100.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-explicit-vertex-parameter.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-trinary-minmax.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.spv-amd-gcn-shader.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.spv-amd-shader-ballot.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.debuginfo.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.clspvreflection.grammar.json) --extinst=,$(location :deqp_spirv_headers_unified1_extinst.nonsemantic.vkspreflection.grammar.json) ",
 }
 
 genrule {
@@ -138,7 +112,7 @@ cc_library {
         "external/deqp-deps/SPIRV-Headers/include"
     ],
     generated_headers: [
-        "deqp_spvtools_generate_grammar_tables",
+        "deqp_spvtools_ggt",
         "deqp_spvtools_generate_language_headers",
         "deqp_spvtools_update_build_version",
         "deqp_spvtools_generate_registry_tables",
