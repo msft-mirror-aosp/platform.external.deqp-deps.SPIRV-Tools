@@ -1515,9 +1515,12 @@ TEST_F(ValidateConversion, BitcastPtrWrongInputType) {
 
   CompileSuccessfully(GenerateKernelCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to be a pointer or int scalar if "
-                        "Result Type is pointer: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("In SPIR-V 1.4 or earlier (and without "
+                "SPV_KHR_physical_storage_buffer), expected input to be a "
+                "pointer or int scalar if "
+                "Result Type is pointer: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongInputTypeSPV1p5) {
@@ -1528,9 +1531,12 @@ TEST_F(ValidateConversion, BitcastPtrWrongInputTypeSPV1p5) {
   CompileSuccessfully(GenerateKernelCode(body).c_str(), SPV_ENV_UNIVERSAL_1_5);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA,
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_5));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to be a pointer, int scalar or 32-bit "
-                        "int vector if Result Type is pointer: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("In SPIR-V 1.5 or later (or with "
+                "SPV_KHR_physical_storage_buffer), expected input to be a "
+                "pointer, int scalar or 32-bit "
+                "int vector if Result Type is pointer: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongInputTypePhysicalStorageBufferKHR) {
@@ -1543,9 +1549,12 @@ TEST_F(ValidateConversion, BitcastPtrWrongInputTypePhysicalStorageBufferKHR) {
                          "\nOpExtension \"SPV_KHR_physical_storage_buffer\"")
           .c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to be a pointer, int scalar or 32-bit "
-                        "int vector if Result Type is pointer: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("In SPIR-V 1.5 or later (or with "
+                "SPV_KHR_physical_storage_buffer), expected input to be a "
+                "pointer, int scalar or 32-bit "
+                "int vector if Result Type is pointer: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongInputTypeIntVectorSPV1p5) {
@@ -1556,9 +1565,12 @@ TEST_F(ValidateConversion, BitcastPtrWrongInputTypeIntVectorSPV1p5) {
   CompileSuccessfully(GenerateKernelCode(body).c_str(), SPV_ENV_UNIVERSAL_1_5);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA,
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_5));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to be a pointer, int scalar or 32-bit "
-                        "int vector if Result Type is pointer: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("In SPIR-V 1.5 or later (or with "
+                "SPV_KHR_physical_storage_buffer), expected input to be a "
+                "pointer, int scalar or 32-bit "
+                "int vector if Result Type is pointer: Bitcast"));
 }
 
 TEST_F(ValidateConversion,
@@ -1572,9 +1584,12 @@ TEST_F(ValidateConversion,
                          "\nOpExtension \"SPV_KHR_physical_storage_buffer\"")
           .c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Expected input to be a pointer, int scalar or 32-bit "
-                        "int vector if Result Type is pointer: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("In SPIR-V 1.5 or later (or with "
+                "SPV_KHR_physical_storage_buffer), expected input to be a "
+                "pointer, int scalar or 32-bit "
+                "int vector if Result Type is pointer: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongResultType) {
@@ -1585,7 +1600,9 @@ TEST_F(ValidateConversion, BitcastPtrWrongResultType) {
   CompileSuccessfully(GenerateKernelCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Pointer can only be converted to another pointer or "
+              HasSubstr("In SPIR-V 1.4 or earlier (and without "
+                        "SPV_KHR_physical_storage_buffer), pointer can only be "
+                        "converted to another pointer or "
                         "int scalar: Bitcast"));
 }
 
@@ -1597,9 +1614,13 @@ TEST_F(ValidateConversion, BitcastPtrWrongResultTypeSPV1p5) {
   CompileSuccessfully(GenerateKernelCode(body).c_str(), SPV_ENV_UNIVERSAL_1_5);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA,
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_5));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Pointer can only be converted to another pointer, int "
-                        "scalar or 32-bit int vector: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "In SPIR-V 1.5 or later (or with SPV_KHR_physical_storage_buffer), "
+          "pointer can only be converted "
+          "to another pointer, int "
+          "scalar or 32-bit int vector: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongResultTypePhysicalStorageBufferKHR) {
@@ -1612,9 +1633,13 @@ TEST_F(ValidateConversion, BitcastPtrWrongResultTypePhysicalStorageBufferKHR) {
                          "\nOpExtension \"SPV_KHR_physical_storage_buffer\"")
           .c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Pointer can only be converted to another pointer, int "
-                        "scalar or 32-bit int vector: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "In SPIR-V 1.5 or later (or with SPV_KHR_physical_storage_buffer), "
+          "pointer can only be converted "
+          "to another pointer, int "
+          "scalar or 32-bit int vector: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastPtrWrongResultTypeIntVectorSPV1p5) {
@@ -1625,9 +1650,13 @@ TEST_F(ValidateConversion, BitcastPtrWrongResultTypeIntVectorSPV1p5) {
   CompileSuccessfully(GenerateKernelCode(body).c_str(), SPV_ENV_UNIVERSAL_1_5);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA,
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_5));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Pointer can only be converted to another pointer, int "
-                        "scalar or 32-bit int vector: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "In SPIR-V 1.5 or later (or with SPV_KHR_physical_storage_buffer), "
+          "pointer can only be converted "
+          "to another pointer, int "
+          "scalar or 32-bit int vector: Bitcast"));
 }
 
 TEST_F(ValidateConversion,
@@ -1641,9 +1670,13 @@ TEST_F(ValidateConversion,
                          "\nOpExtension \"SPV_KHR_physical_storage_buffer\"")
           .c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Pointer can only be converted to another pointer, int "
-                        "scalar or 32-bit int vector: Bitcast"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "In SPIR-V 1.5 or later (or with SPV_KHR_physical_storage_buffer), "
+          "pointer can only be converted "
+          "to another pointer, int "
+          "scalar or 32-bit int vector: Bitcast"));
 }
 
 TEST_F(ValidateConversion, BitcastDifferentTotalBitWidth) {
@@ -1990,25 +2023,30 @@ OpExtension "SPV_KHR_ray_query"
 TEST_F(ValidateConversion, BitcastUntypedPointerInput) {
   const std::string spirv = R"(
 OpCapability Shader
+OpCapability Int64
 OpCapability VariablePointers
 OpCapability UntypedPointersKHR
 OpCapability WorkgroupMemoryExplicitLayoutKHR
+OpCapability PhysicalStorageBufferAddresses
 OpExtension "SPV_KHR_workgroup_memory_explicit_layout"
 OpExtension "SPV_KHR_variable_pointers"
 OpExtension "SPV_KHR_untyped_pointers"
-OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %main "main" %var
+OpExtension "SPV_KHR_physical_storage_buffer"
+OpMemoryModel PhysicalStorageBuffer64 GLSL450
+OpEntryPoint GLCompute %main "main"
 OpDecorate %struct Block
 OpMemberDecorate %struct 0 Offset 0
 %void = OpTypeVoid
 %int = OpTypeInt 32 0
+%long = OpTypeInt 64 0
+%long_0 = OpConstant %long 0
 %struct = OpTypeStruct %int
-%ptr = OpTypeUntypedPointerKHR Workgroup
-%var = OpUntypedVariableKHR %ptr Workgroup %struct
+%ptr = OpTypeUntypedPointerKHR PhysicalStorageBuffer
 %void_fn = OpTypeFunction %void
 %main = OpFunction %void None %void_fn
 %entry = OpLabel
-%cast = OpBitcast %int %var
+%ptr_cast = OpBitcast %ptr %long_0
+%cast = OpBitcast %long %ptr_cast
 OpReturn
 OpFunctionEnd
 )";
@@ -2020,23 +2058,27 @@ OpFunctionEnd
 TEST_F(ValidateConversion, BitcastUntypedPointerOutput) {
   const std::string spirv = R"(
 OpCapability Shader
+OpCapability Int64
 OpCapability VariablePointers
 OpCapability UntypedPointersKHR
 OpCapability WorkgroupMemoryExplicitLayoutKHR
+OpCapability PhysicalStorageBufferAddresses
 OpExtension "SPV_KHR_workgroup_memory_explicit_layout"
 OpExtension "SPV_KHR_variable_pointers"
 OpExtension "SPV_KHR_untyped_pointers"
-OpMemoryModel Logical GLSL450
+OpExtension "SPV_KHR_physical_storage_buffer"
+OpMemoryModel PhysicalStorageBuffer64 GLSL450
 OpEntryPoint GLCompute %main "main"
 %void = OpTypeVoid
 %int = OpTypeInt 32 0
 %int_0 = OpConstant %int 0
-%ptr = OpTypeUntypedPointerKHR Workgroup
-%var = OpUntypedVariableKHR %ptr Workgroup %int
+%long = OpTypeInt 64 0
+%long_0 = OpConstant %long 0
+%ptr = OpTypeUntypedPointerKHR PhysicalStorageBuffer
 %void_fn = OpTypeFunction %void
 %main = OpFunction %void None %void_fn
 %entry = OpLabel
-%cast = OpBitcast %ptr %int_0
+%cast = OpBitcast %ptr %long_0
 OpReturn
 OpFunctionEnd
 )";

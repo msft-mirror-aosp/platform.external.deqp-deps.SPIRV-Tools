@@ -42,14 +42,17 @@ ModuleLayoutSection InstructionLayoutSection(
 
   switch (op) {
     case spv::Op::OpCapability:
+    case spv::Op::OpConditionalCapabilityINTEL:
       return kLayoutCapabilities;
     case spv::Op::OpExtension:
+    case spv::Op::OpConditionalExtensionINTEL:
       return kLayoutExtensions;
     case spv::Op::OpExtInstImport:
       return kLayoutExtInstImport;
     case spv::Op::OpMemoryModel:
       return kLayoutMemoryModel;
     case spv::Op::OpEntryPoint:
+    case spv::Op::OpConditionalEntryPointINTEL:
       return kLayoutEntryPoint;
     case spv::Op::OpExecutionMode:
     case spv::Op::OpExecutionModeId:
@@ -856,6 +859,22 @@ void ValidationState_t::RegisterStorageClassConsumer(
           }
           return true;
         });
+  } else if (storage_class == spv::StorageClass::HitObjectAttributeEXT) {
+    function(consumer->function()->id())
+        ->RegisterExecutionModelLimitation([](spv::ExecutionModel model,
+                                              std::string* message) {
+          if (model != spv::ExecutionModel::RayGenerationKHR &&
+              model != spv::ExecutionModel::ClosestHitKHR &&
+              model != spv::ExecutionModel::MissKHR) {
+            if (message) {
+              *message =
+                  "HitObjectAttributeEXT Storage Class is limited to "
+                  "RayGenerationKHR, ClosestHitKHR or MissKHR execution model";
+            }
+            return false;
+          }
+          return true;
+        });
   }
 }
 
@@ -900,6 +919,8 @@ uint32_t ValidationState_t::GetComponentType(uint32_t id) const {
     case spv::Op::OpTypeFloat:
     case spv::Op::OpTypeInt:
     case spv::Op::OpTypeBool:
+    case spv::Op::OpTypePointer:
+    case spv::Op::OpTypeUntypedPointerKHR:
       return id;
 
     case spv::Op::OpTypeArray:
@@ -965,11 +986,20 @@ uint32_t ValidationState_t::GetBitWidth(uint32_t id) const {
   const Instruction* inst = FindDef(component_type_id);
   assert(inst);
 
-  if (inst->opcode() == spv::Op::OpTypeFloat ||
-      inst->opcode() == spv::Op::OpTypeInt)
-    return inst->word(2);
-
-  if (inst->opcode() == spv::Op::OpTypeBool) return 1;
+  switch (inst->opcode()) {
+    case spv::Op::OpTypeFloat:
+    case spv::Op::OpTypeInt:
+      return inst->word(2);
+    case spv::Op::OpTypeBool:
+      return 1;
+    case spv::Op::OpTypePointer:
+    case spv::Op::OpTypeUntypedPointerKHR:
+      assert(inst->GetOperandAs<spv::StorageClass>(1) ==
+             spv::StorageClass::PhysicalStorageBuffer);
+      return 64;  // all pointers to another PSB is 64-bit
+    default:
+      break;
+  }
 
   assert(0);
   return 0;
@@ -1367,6 +1397,28 @@ bool ValidationState_t::GetPointerTypeInfo(
   return true;
 }
 
+uint32_t ValidationState_t::GetLargestScalarType(uint32_t id) const {
+  const Instruction* inst = FindDef(id);
+
+  switch (inst->opcode()) {
+    case spv::Op::OpTypeStruct: {
+      uint32_t size = 0;
+      for (uint32_t i = 1; i < inst->operands().size(); ++i) {
+        const uint32_t member_size =
+            GetLargestScalarType(inst->GetOperandAs<uint32_t>(i));
+        size = std::max(size, member_size);
+      }
+      return size;
+    }
+    case spv::Op::OpTypeArray:
+      return GetLargestScalarType(inst->GetOperandAs<uint32_t>(1));
+    case spv::Op::OpTypeVector:
+      return GetLargestScalarType(inst->GetOperandAs<uint32_t>(1));
+    default:
+      return GetBitWidth(id) / 8;
+  }
+}
+
 bool ValidationState_t::IsAccelerationStructureType(uint32_t id) const {
   const Instruction* inst = FindDef(id);
   return inst && inst->opcode() == spv::Op::OpTypeAccelerationStructureKHR;
@@ -1505,8 +1557,7 @@ spv_result_t ValidationState_t::CooperativeMatrixShapesMatch(
 
   if (m1_is_const_int32 && m2_is_const_int32 && m1_value != m2_value) {
     return diag(SPV_ERROR_INVALID_DATA, inst)
-           << "Expected scopes of Matrix and Result Type to be "
-           << "identical";
+           << "Expected scopes of Matrix and Result Type to be " << "identical";
   }
 
   std::tie(m1_is_int32, m1_is_const_int32, m1_value) =
@@ -1997,6 +2048,7 @@ bool ValidationState_t::IsValidStorageClass(
       case spv::StorageClass::ShaderRecordBufferKHR:
       case spv::StorageClass::TaskPayloadWorkgroupEXT:
       case spv::StorageClass::HitObjectAttributeNV:
+      case spv::StorageClass::HitObjectAttributeEXT:
       case spv::StorageClass::TileImageEXT:
       case spv::StorageClass::NodePayloadAMDX:
       case spv::StorageClass::TileAttachmentQCOM:
@@ -2219,6 +2271,12 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-LocalInvocationId-LocalInvocationId-04282);
     case 4283:
       return VUID_WRAP(VUID-LocalInvocationId-LocalInvocationId-04283);
+    case 4284:
+      return VUID_WRAP(VUID-LocalInvocationIndex-LocalInvocationIndex-04284);
+    case 4285:
+      return VUID_WRAP(VUID-LocalInvocationIndex-LocalInvocationIndex-04285);
+    case 4286:
+      return VUID_WRAP(VUID-LocalInvocationIndex-LocalInvocationIndex-04286);
     case 4293:
       return VUID_WRAP(VUID-NumSubgroups-NumSubgroups-04293);
     case 4294:
@@ -2280,7 +2338,7 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
     case 4330:
       return VUID_WRAP(VUID-PrimitiveId-PrimitiveId-04330);
     case 4333:
-      return VUID_WRAP(VUID-PrimitiveId-PrimitiveId-04333);
+      return VUID_WRAP(VUID-PrimitiveId-Fragment-04333);
     case 4334:
       return VUID_WRAP(VUID-PrimitiveId-PrimitiveId-04334);
     case 4336:
@@ -2469,10 +2527,6 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-None-04644);
     case 4645:
       return VUID_WRAP(VUID-StandaloneSpirv-None-04645);
-    case 10609:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpControlBarrier-10609);
-    case 4650:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpControlBarrier-04650);
     case 4651:
       return VUID_WRAP(VUID-StandaloneSpirv-OpVariable-04651);
     case 4652:
@@ -2507,8 +2561,6 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-OpTypeRuntimeArray-04680);
     case 4682:
       return VUID_WRAP(VUID-StandaloneSpirv-OpControlBarrier-04682);
-    case 6426:
-      return VUID_WRAP(VUID-StandaloneSpirv-LocalSize-06426); // formally 04683
     case 4685:
       return VUID_WRAP(VUID-StandaloneSpirv-OpGroupNonUniformBallotBitCount-04685);
     case 4686:
@@ -2539,14 +2591,6 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-PhysicalStorageBuffer64-04710);
     case 4711:
       return VUID_WRAP(VUID-StandaloneSpirv-OpTypeForwardPointer-04711);
-    case 4730:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpAtomicStore-04730);
-    case 4731:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpAtomicLoad-04731);
-    case 4732:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpMemoryBarrier-04732);
-    case 4733:
-      return VUID_WRAP(VUID-StandaloneSpirv-OpMemoryBarrier-04733);
     case 4734:
       return VUID_WRAP(VUID-StandaloneSpirv-OpVariable-04734);
     case 4744:
@@ -2579,6 +2623,8 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-Flat-06202);
     case 6214:
       return VUID_WRAP(VUID-StandaloneSpirv-OpTypeImage-06214);
+    case 6314:
+      return VUID_WRAP(VUID-StandaloneSpirv-PhysicalStorageBuffer64-06314);
     case 6491:
       return VUID_WRAP(VUID-StandaloneSpirv-DescriptorSet-06491);
     case 6671:
@@ -2689,6 +2735,10 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
       return VUID_WRAP(VUID-StandaloneSpirv-OpEntryPoint-09658);
     case 9659:
       return VUID_WRAP(VUID-StandaloneSpirv-OpEntryPoint-09659);
+    case 10151:
+      return VUID_WRAP(VUID-StandaloneSpirv-DerivativeGroupQuadsKHR-10151);
+    case 10152:
+      return VUID_WRAP(VUID-StandaloneSpirv-DerivativeGroupLinearKHR-10152);
     case 10213:
       // This use to be a standalone, but maintenance8 will set allow_offset_texture_operand now
       return VUID_WRAP(VUID-RuntimeSpirv-Offset-10213);
@@ -2723,12 +2773,46 @@ std::string ValidationState_t::VkErrorID(uint32_t id,
     case 10684:
       return VUID_WRAP(VUID-StandaloneSpirv-None-10684);
     case 10685:
-      return VUID_WRAP(VUID-StandaloneSpirv-None-10685);
+      return VUID_WRAP(VUID-StandaloneSpirv-None-10685); // formally 04683/06426
     case 10824:
       // This use to be a standalone, but maintenance9 will set allow_vulkan_32_bit_bitwise now
       return VUID_WRAP(VUID-RuntimeSpirv-None-10824);
+    case 10865:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10865);
+    case 10866:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10866);
+    case 10867:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10867);
+    case 10868:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10868);
+    case 10869:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10869);
+    case 10870:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10870);
+    case 10871:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10871);
+    case 10872:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10872);
+    case 10873:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10873);
+    case 10874:
+      return VUID_WRAP(VUID-StandaloneSpirv-MemorySemantics-10874);
+    case 10875:
+      return VUID_WRAP(VUID-StandaloneSpirv-UnequalMemorySemantics-10875);
+    case 10876:
+      return VUID_WRAP(VUID-StandaloneSpirv-UnequalMemorySemantics-10876);
+    case 10877:
+      return VUID_WRAP(VUID-StandaloneSpirv-UnequalMemorySemantics-10877);
+    case 10878:
+      return VUID_WRAP(VUID-StandaloneSpirv-UnequalMemorySemantics-10878);
+    case 10879:
+      return VUID_WRAP(VUID-StandaloneSpirv-UnequalMemorySemantics-10879);
     case 10880:
       return VUID_WRAP(VUID-StandaloneSpirv-TessLevelInner-10880);
+    case 11167:
+      return VUID_WRAP(VUID-StandaloneSpirv-OpUntypedVariableKHR-11167);
+    case 11805:
+      return VUID_WRAP(VUID-StandaloneSpirv-OpArrayLength-11805);
     default:
       return "";  // unknown id
   }
