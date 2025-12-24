@@ -48,6 +48,7 @@ add_spvtools_unittest(TARGET val_abcde
        val_extension_spv_khr_terminate_invocation_test.cpp
        val_extension_spv_khr_subgroup_rotate_test.cpp
        val_extension_spv_nv_raw_access_chains.cpp
+       val_extension_spv_intel_function_variants.cpp
        val_extension_spv_intel_inline_assembly.cpp
        val_ext_inst_test.cpp
        val_ext_inst_debug_test.cpp
@@ -79,8 +80,10 @@ add_spvtools_unittest(TARGET val_fghijklmnop
        val_interfaces_test.cpp
        val_layout_test.cpp
        val_literals_test.cpp
+       val_logical_pointers_test.cpp
        val_logicals_test.cpp
        val_memory_test.cpp
+       val_memory_semantics_test.cpp
        val_mesh_shading_test.cpp
        val_misc_test.cpp
        val_modes_test.cpp
